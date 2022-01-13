@@ -55,6 +55,7 @@ public:
     //// Virtual methods from OTARequestorDriver
     bool CanConsent() override;
     uint16_t GetMaxDownloadBlockSize() override;
+    void SetMaxDownloadBlockSize(uint16_t maxDownloadBlockSize) override;
     void HandleError(UpdateFailureState state, CHIP_ERROR error) override;
     void HandleIdleState(IdleStateReason reason) override;
     void UpdateAvailable(const UpdateDescription & update, System::Clock::Seconds32 delay) override;
@@ -82,6 +83,7 @@ protected:
     OTAImageProcessorInterface * mImageProcessor = nullptr;
     uint32_t mOtaStartDelaySec                   = 0;
     uint32_t mPeriodicQueryTimeInterval = (24 * 60 * 60); // Timeout for querying providers on the default OTA provider list
+    uint16_t maxDownloadBlockSize                = 1024;
     // Maximum number of times to retry a BUSY OTA provider before moving to the next available one
     static constexpr uint8_t kMaxBusyProviderRetryCount = 3;
     uint8_t mProviderRetryCount; // Track retry count for the current provider

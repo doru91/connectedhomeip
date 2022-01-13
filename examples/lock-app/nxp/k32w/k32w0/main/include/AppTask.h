@@ -66,6 +66,8 @@ private:
 
     static void ThreadProvisioningHandler(const chip::DeviceLayer::ChipDeviceEvent * event, intptr_t arg);
 
+    static void UpdateClusterStateInternal(intptr_t arg);
+
     static void ThreadStart();
     void StartTimer(uint32_t aTimeoutInMs);
 

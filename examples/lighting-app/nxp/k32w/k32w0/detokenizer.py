@@ -7,7 +7,6 @@ import pw_tokenizer
 
 def parse_args():
     """Parse input arguments
-
     Return:
         parsed arguments struncture
     """
@@ -37,11 +36,9 @@ def parse_args():
 
 def decode_string(tstr, detok):
     """Decodes a single token.
-
     Args:
         tstr        - encoded input string
         detok       - detokenizer
-
     Return:
         decoded string or None
     """
@@ -58,7 +55,6 @@ def decode_string(tstr, detok):
 
 def decode_serial(serialport, outfile, database):
     """Decodes logs from serial port.
-
     Args:
         infile      - path to input file
         outfile     - path to output file
@@ -100,7 +96,6 @@ def decode_serial(serialport, outfile, database):
 
 def decode_file(infile, outfile, database):
     """Decodes logs from input file.
-
     Args:
         infile      - path to input file
         outfile     - path to output file

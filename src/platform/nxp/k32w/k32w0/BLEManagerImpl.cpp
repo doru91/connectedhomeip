@@ -100,7 +100,7 @@ namespace {
 #define CONTROLLER_TASK_STACK_SIZE (gControllerTaskStackSize_c / sizeof(StackType_t))
 
 /* host task configuration */
-#define HOST_TASK_PRIORITY (3U)
+#define HOST_TASK_PRIORITY (4U)
 #define HOST_TASK_STACK_SIZE (gHost_TaskStackSize_c / sizeof(StackType_t))
 
 /* ble app task configuration */

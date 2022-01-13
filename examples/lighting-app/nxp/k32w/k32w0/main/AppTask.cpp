@@ -34,12 +34,14 @@
 #include <app/util/attribute-storage.h>
 
 /* OTA related includes */
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
 #include "OTAImageProcessorImpl.h"
 #include "OtaSupport.h"
 #include <app/clusters/ota-requestor/BDXDownloader.h>
 #include <app/clusters/ota-requestor/DefaultOTARequestorStorage.h>
 #include <app/clusters/ota-requestor/GenericOTARequestorDriver.h>
 #include <app/clusters/ota-requestor/OTARequestor.h>
+#endif
 
 #include "Keyboard.h"
 #include "LED.h"
@@ -68,7 +70,6 @@ static LEDWidget sStatusLED;
 static LEDWidget sLightLED;
 
 static bool sIsThreadProvisioned = false;
-static bool sIsThreadEnabled     = false;
 static bool sHaveBLEConnections  = false;
 
 static uint32_t eventMask = 0;
@@ -84,12 +85,20 @@ using namespace chip;
 
 AppTask AppTask::sAppTask;
 
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
 /* OTA related variables */
 static OTARequestor gRequestorCore;
 static DefaultOTARequestorStorage gRequestorStorage;
 static DeviceLayer::GenericOTARequestorDriver gRequestorUser;
 static BDXDownloader gDownloader;
 static OTAImageProcessorImpl gImageProcessor;
+
+static NodeId providerNodeId             = 2;
+static FabricIndex providerFabricIndex   = 1;
+constexpr uint16_t requestedOtaBlockSize  = 1024;
+#endif
+
+extern bool shouldReset;
 
 CHIP_ERROR AppTask::StartAppTask()
 {
@@ -111,7 +120,7 @@ CHIP_ERROR AppTask::Init()
     CHIP_ERROR err = CHIP_NO_ERROR;
 
     // Init ZCL Data Model and start server
-    chip::Server::GetInstance().Init();
+    PlatformMgr().ScheduleWork(InitServer, 0);
 
     // Initialize device attestation config
 #ifdef ENABLE_HSM_DEVICE_ATTESTATION
@@ -120,19 +129,9 @@ CHIP_ERROR AppTask::Init()
     SetDeviceAttestationCredentialsProvider(Examples::GetExampleDACProvider());
 #endif
 
-    // Initialize and interconnect the Requestor and Image Processor objects -- START
-    SetRequestorInstance(&gRequestorCore);
-
-    gRequestorStorage.Init(Server::GetInstance().GetPersistentStorage());
-    gRequestorCore.Init(Server::GetInstance(), gRequestorStorage, gRequestorUser, gDownloader);
-    gRequestorUser.Init(&gRequestorCore, &gImageProcessor);
-
-    gImageProcessor.SetOTAImageFile(CharSpan("test.txt"));
-    gImageProcessor.SetOTADownloader(&gDownloader);
-
-    // Connect the gDownloader and Image Processor objects
-    gDownloader.SetImageProcessorDelegate(&gImageProcessor);
-    // Initialize and interconnect the Requestor and Image Processor objects -- END
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+    PlatformMgr().ScheduleWork(InitOTA, 0);
+#endif
 
     // QR code will be used with CHIP Tool
     PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
@@ -154,8 +153,7 @@ CHIP_ERROR AppTask::Init()
     sStatusLED.Init(SYSTEM_STATE_LED);
 
     sLightLED.Init(LIGHT_STATE_LED);
-    sLightLED.Set(!LightingMgr().IsTurnedOff());
-    UpdateClusterState();
+    UpdateDeviceState();
 
     /* intialize the Keyboard and button press calback */
     KBD_Init(KBD_Callback);
@@ -193,6 +191,30 @@ CHIP_ERROR AppTask::Init()
     return err;
 }
 
+void AppTask::InitServer(intptr_t arg)
+{
+    // Init ZCL Data Model and start server
+    VerifyOrDie((chip::Server::GetInstance().Init()) == CHIP_NO_ERROR);
+}
+
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+void AppTask::InitOTA(intptr_t arg)
+{
+    // Initialize and interconnect the Requestor and Image Processor objects -- START
+    SetRequestorInstance(&gRequestorCore);
+
+    gRequestorStorage.Init(chip::Server::GetInstance().GetPersistentStorage());
+    gRequestorCore.Init(chip::Server::GetInstance(), gRequestorStorage, gRequestorUser, gDownloader);
+    gRequestorUser.SetMaxDownloadBlockSize(requestedOtaBlockSize);
+    gRequestorUser.Init(&gRequestorCore, &gImageProcessor);
+    gImageProcessor.SetOTADownloader(&gDownloader);
+
+    // Connect the gDownloader and Image Processor objects
+    gDownloader.SetImageProcessorDelegate(&gImageProcessor);
+    // Initialize and interconnect the Requestor and Image Processor objects -- END
+}
+#endif
+
 void AppTask::AppTaskMain(void * pvParameter)
 {
     AppEvent event;
@@ -223,8 +245,6 @@ void AppTask::AppTaskMain(void * pvParameter)
 #if CHIP_DEVICE_CONFIG_THREAD_ENABLE_CLI
             K32WUartProcess();
 #endif
-            sIsThreadProvisioned = ConnectivityMgr().IsThreadProvisioned();
-            sIsThreadEnabled     = ConnectivityMgr().IsThreadEnabled();
             sHaveBLEConnections  = (ConnectivityMgr().NumBLEConnections() != 0);
             PlatformMgr().UnlockChipStack();
         }
@@ -241,9 +261,10 @@ void AppTask::AppTaskMain(void * pvParameter)
         // rate of 100ms.
         //
         // Otherwise, blink the LED ON for a very short time.
+
         if (sAppTask.mFunction != kFunction_FactoryReset)
         {
-            if (sIsThreadProvisioned && sIsThreadEnabled)
+            if (sIsThreadProvisioned)
             {
                 sStatusLED.Blink(950, 50);
             }
@@ -261,17 +282,8 @@ void AppTask::AppTaskMain(void * pvParameter)
         sLightLED.Animate();
 
         HandleKeyboard();
-
-        if (gDownloader.GetState() == OTADownloader::State::kInProgress)
-        {
-            OTA_TransactionResume();
-
-            if (!EEPROM_isBusy())
-            {
-                gDownloader.FetchNextData();
-            }
-        }
     }
+
 }
 
 void AppTask::ButtonEventHandler(uint8_t pin_no, uint8_t button_action)
@@ -481,14 +493,23 @@ void AppTask::OTAHandler(AppEvent * aEvent)
     if (aEvent->ButtonEvent.PinNo != OTA_BUTTON)
         return;
 
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
     if (sAppTask.mFunction != kFunction_NoneSelected)
     {
         K32W_LOG("Another function is scheduled. Could not initiate OTA!");
         return;
     }
 
-    static_cast<OTARequestor *>(GetRequestorInstance())->TriggerImmediateQuery();
+    PlatformMgr().ScheduleWork(StartOTAQuery, 0);
+#endif
 }
+
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+void AppTask::StartOTAQuery(intptr_t arg)
+{
+	static_cast<OTARequestor *>(GetRequestorInstance())->TriggerImmediateQuery();
+}
+#endif
 
 void AppTask::BleHandler(AppEvent * aEvent)
 {
@@ -524,6 +545,18 @@ void AppTask::BleHandler(AppEvent * aEvent)
 #if CONFIG_CHIP_NFC_COMMISSIONING
 void AppTask::ThreadProvisioningHandler(const ChipDeviceEvent * event, intptr_t)
 {
+	if (event->Type == DeviceEventType::kServiceProvisioningChange && event->ServiceProvisioningChange.IsServiceProvisioned)
+	{
+		if (event->ServiceProvisioningChange.IsServiceProvisioned)
+		{
+		    sIsThreadProvisioned = TRUE;
+		}
+		else
+		{
+			sIsThreadProvisioned = FALSE;
+		}
+	}
+
     if (event->Type == DeviceEventType::kCHIPoBLEAdvertisingChange && event->CHIPoBLEAdvertisingChange.Result == kActivity_Stopped)
     {
         if (!NFCMgr().IsTagEmulationStarted())
@@ -635,6 +668,34 @@ void AppTask::PostTurnOnActionRequest(int32_t aActor, LightingManager::Action_t 
     PostEvent(&event);
 }
 
+void AppTask::PostOTAResume()
+{
+    AppEvent event;
+    event.Type              = AppEvent::kEventType_OTAResume;
+    event.Handler           = OTAResumeEventHandler;
+    PostEvent(&event);
+}
+
+void AppTask::OTAResumeEventHandler(AppEvent * aEvent)
+{
+    if (aEvent->Type == AppEvent::kEventType_OTAResume)
+    {
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+        if (gDownloader.GetState() == OTADownloader::State::kInProgress)
+        {
+            gImageProcessor.TriggerNewRequestForData();
+        }
+#endif
+    }
+}
+
+extern "C" void vApplicationIdleHook( void )
+{
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+            OTA_TransactionResume();
+#endif
+}
+
 void AppTask::PostEvent(const AppEvent * aEvent)
 {
     if (sAppEventQueue != NULL)
@@ -660,13 +721,35 @@ void AppTask::DispatchEvent(AppEvent * aEvent)
 
 void AppTask::UpdateClusterState(void)
 {
+    PlatformMgr().ScheduleWork(UpdateClusterStateInternal, 0);
+}
+
+void AppTask::UpdateClusterStateInternal(intptr_t arg)
+{
     uint8_t newValue = !LightingMgr().IsTurnedOff();
 
     // write the new on/off value
     EmberAfStatus status = emberAfWriteAttribute(1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID, CLUSTER_MASK_SERVER,
-                                                 (uint8_t *) &newValue, ZCL_BOOLEAN_ATTRIBUTE_TYPE);
+                                                (uint8_t *) &newValue, ZCL_BOOLEAN_ATTRIBUTE_TYPE);
     if (status != EMBER_ZCL_STATUS_SUCCESS)
     {
         ChipLogError(NotSpecified, "ERR: updating on/off %x", status);
     }
+}
+
+void AppTask::UpdateDeviceState(void)
+{
+    PlatformMgr().ScheduleWork(UpdateDeviceStateInternal, 0);
+}
+
+void AppTask::UpdateDeviceStateInternal(intptr_t arg)
+{
+    bool onoffAttrValue  = 0;
+
+    /* get onoff attribute value */
+    (void)emberAfReadAttribute(1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID, CLUSTER_MASK_SERVER,
+	                          (uint8_t *) &onoffAttrValue, 1, NULL);
+
+    /* set the device state */
+    sLightLED.Set(onoffAttrValue);
 }

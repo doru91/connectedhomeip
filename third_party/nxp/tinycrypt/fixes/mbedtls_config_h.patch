@@ -1,0 +1,52 @@
+diff --git a/include/mbedtls/config.h b/include/mbedtls/config.h
+index 464b61ee2..d75287aab 100644
+--- a/include/mbedtls/config.h
++++ b/include/mbedtls/config.h
+@@ -2703,6 +2703,47 @@
+  */
+ #define MBEDTLS_ECP_C
+ 
++/**
++ * \def MBEDTLS_USE_TINYCRYPT
++ *
++ * Enable the TinyCrypt ECC library. This module provides alternative ECC
++ * handling functions replacing the native Mbed TLS ECP module.
++ *
++ * TinyCrypt is a project independent from Mbed TLS, licensed under 3-clause
++ * BSD, and can be found at https://github.com/intel/tinycrypt - this option
++ * only enables the ECC modules from TinyCrypt.
++ *
++ * Requires: MBEDTLS_SSL_CONF_RNG			(can be ignored for the moment since we don't use ssl)		
++ *           MBEDTLS_SSL_CONF_SINGLE_EC		(can be ignored for the moment since we don't use ssl)		
++ *           MBEDTLS_SSL_CONF_SINGLE_EC_TLS_ID == 23	(can be ignored for the moment since we don't use ssl)		
++ *           MBEDTLS_SSL_CONF_SINGLE_UECC_GRP_ID == MBEDTLS_UECC_DP_SECP256R1	(can be ignored for the moment since we don't use ssl)		
++ *           MBEDTLS_SHA256_C
++ *
++ * \see MBEDTLS_SSL_CONF_RNG
++ *
++ * \see MBEDTLS_SSL_CONF_SINGLE_EC
++ *
++ * Module:  tinycrypt/ecc.c
++ *          tinycrypt/ecc_dh.c
++ *          tinycrypt/ecc_dsa.c
++ */
++#define MBEDTLS_USE_TINYCRYPT
++
++/**
++ * \def MBEDTLS_OPTIMIZE_TINYCRYPT_ASM
++ *
++ * Optimize TinyCrypt operations using assembly.
++ * Add T32/A32 assembly for core tinycrypt/microecc routines, for ARMC5 and GCC;
++ * Use fast integer types to avoid frequent narrowing instructions;
++ * Use __builtin_clz and avoid boolean ops.
++ *
++ * Requires: MBEDTLS_USE_TINYCRYPT
++ *           MBEDTLS_HAVE_ASM
++ *
++ * Module:  tinycrypt/ecc.c
++ */
++#define MBEDTLS_OPTIMIZE_TINYCRYPT_ASM
++
+ /**
+  * \def MBEDTLS_ENTROPY_C
+  *

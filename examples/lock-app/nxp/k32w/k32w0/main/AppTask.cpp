@@ -53,7 +53,6 @@ static LEDWidget sLockLED;
 #endif
 
 static bool sIsThreadProvisioned = false;
-static bool sIsThreadEnabled     = false;
 static bool sHaveBLEConnections  = false;
 
 static uint32_t eventMask = 0;
@@ -86,7 +85,7 @@ CHIP_ERROR AppTask::Init()
     CHIP_ERROR err = CHIP_NO_ERROR;
 
     // Init ZCL Data Model and start server
-    chip::Server::GetInstance().Init();
+    ReturnErrorOnFailure((chip::Server::GetInstance().Init());
 
     // Initialize device attestation config
     SetDeviceAttestationCredentialsProvider(Examples::GetExampleDACProvider());
@@ -193,9 +192,6 @@ void AppTask::AppTaskMain(void * pvParameter)
 #if CHIP_DEVICE_CONFIG_THREAD_ENABLE_CLI
             K32WUartProcess();
 #endif
-
-            sIsThreadProvisioned = ConnectivityMgr().IsThreadProvisioned();
-            sIsThreadEnabled     = ConnectivityMgr().IsThreadEnabled();
             sHaveBLEConnections  = (ConnectivityMgr().NumBLEConnections() != 0);
             PlatformMgr().UnlockChipStack();
         }
@@ -216,7 +212,7 @@ void AppTask::AppTaskMain(void * pvParameter)
 #if !cPWR_UsePowerDownMode
         if (sAppTask.mFunction != kFunction_FactoryReset)
         {
-            if (sIsThreadProvisioned && sIsThreadEnabled)
+            if (sIsThreadProvisioned)
             {
                 sStatusLED.Blink(950, 50);
             }
@@ -536,6 +532,18 @@ void AppTask::BleHandler(void * aGenericEvent)
 #if CONFIG_CHIP_NFC_COMMISSIONING
 void AppTask::ThreadProvisioningHandler(const ChipDeviceEvent * event, intptr_t)
 {
+    if (event->Type == DeviceEventType::kServiceProvisioningChange && event->ServiceProvisioningChange.IsServiceProvisioned)
+    {
+        if (event->ServiceProvisioningChange.IsServiceProvisioned)
+        {
+            sIsThreadProvisioned = TRUE;
+        }
+        else
+        {
+            sIsThreadProvisioned = FALSE;
+        }
+    }
+
     if (event->Type == DeviceEventType::kCHIPoBLEAdvertisingChange && event->CHIPoBLEAdvertisingChange.Result == kActivity_Stopped)
     {
         if (!NFCMgr().IsTagEmulationStarted())
@@ -701,6 +709,10 @@ void AppTask::DispatchEvent(AppEvent * aEvent)
 }
 
 void AppTask::UpdateClusterState(void)
+{
+    PlatformMgr().ScheduleWork(UpdateClusterStateInternal, 0);
+}
+void AppTask::UpdateClusterStateInternal(intptr_t arg)
 {
     uint8_t newValue = !BoltLockMgr().IsUnlocked();
 

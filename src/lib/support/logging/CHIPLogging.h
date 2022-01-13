@@ -380,7 +380,7 @@ bool IsCategoryEnabled(uint8_t category);
  * have the exchange id and initiator/responder boolean, not an actual exchange,
  * so we want to have a helper for that case too.
  */
-#define ChipLogFormatExchangeId "%" PRIu16 "%c"
+#define ChipLogFormatExchangeId "%i" "%c"
 #define ChipLogValueExchangeId(id, isInitiator) id, ((isInitiator) ? 'i' : 'r')
 #define ChipLogFormatExchange ChipLogFormatExchangeId
 #define ChipLogValueExchange(ec) ChipLogValueExchangeId((ec)->GetExchangeId(), (ec)->IsInitiator())
