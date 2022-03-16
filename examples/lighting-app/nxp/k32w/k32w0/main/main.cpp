@@ -46,9 +46,39 @@ using namespace ::chip::Logging;
 
 #include <AppTask.h>
 
+#ifdef K32WMCM_APP_BUILD
+#include "MMAC.h"
+#include "mac_sap.h"
+#include "AppApi.h"
+#endif
+
 typedef void (*InitFunc)(void);
 extern InitFunc __init_array_start;
 extern InitFunc __init_array_end;
+
+
+#ifdef K32WMCM_APP_BUILD
+/* Must be called before zps_eAplAfInit() */
+void APP_SetHighTxPowerMode();
+
+/* Must be called after zps_eAplAfInit() */
+void APP_SetMaxTxPower();
+
+#undef HIGH_TX_PWR_LIMIT
+#define HIGH_TX_PWR_LIMIT 15	/* dBm */
+/* High Tx power */
+void APP_SetHighTxPowerMode()
+{
+	if (CHIP_IS_HITXPOWER_CAPABLE())
+		vMMAC_SetTxPowerMode(TRUE);
+}
+
+void APP_SetMaxTxPower()
+{
+	if (CHIP_IS_HITXPOWER_CAPABLE())
+		eAppApiPlmeSet(PHY_PIB_ATTR_TX_POWER, HIGH_TX_PWR_LIMIT);
+}
+#endif
 
 /* needed for FreeRtos Heap 4 */
 uint8_t __attribute__((section(".heap"))) ucHeap[HEAP_SIZE];
@@ -77,6 +107,10 @@ extern "C" void main_task(void const * argument)
 
     // Init Chip memory management before the stack
     chip::Platform::MemoryInit();
+    
+#ifdef K32WMCM_APP_BUILD
+    APP_SetHighTxPowerMode();
+#endif
 
     CHIP_ERROR ret = PlatformMgr().InitChipStack();
     if (ret != CHIP_NO_ERROR)
@@ -91,6 +125,10 @@ extern "C" void main_task(void const * argument)
         K32W_LOG("Error during ThreadStackMgr().InitThreadStack()");
         goto exit;
     }
+
+#ifdef K32WMCM_APP_BUILD
+    APP_SetMaxTxPower();
+#endif
 
     ret = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::kThreadDeviceType_MinimalEndDevice);
     if (ret != CHIP_NO_ERROR)
