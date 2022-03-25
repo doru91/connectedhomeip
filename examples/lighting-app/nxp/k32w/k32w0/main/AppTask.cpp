@@ -507,7 +507,7 @@ void AppTask::OTAHandler(AppEvent * aEvent)
 #if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
 void AppTask::StartOTAQuery(intptr_t arg)
 {
-	static_cast<OTARequestor *>(GetRequestorInstance())->TriggerImmediateQuery();
+    static_cast<OTARequestor *>(GetRequestorInstance())->TriggerImmediateQuery();
 }
 #endif
 
@@ -543,19 +543,19 @@ void AppTask::BleHandler(AppEvent * aEvent)
 }
 
 #if CONFIG_CHIP_NFC_COMMISSIONING
-void AppTask::ThreadProvisioningHandler(const ChipDeviceEvent * event, intptr_t)
-{
-	if (event->Type == DeviceEventType::kServiceProvisioningChange && event->ServiceProvisioningChange.IsServiceProvisioned)
-	{
-		if (event->ServiceProvisioningChange.IsServiceProvisioned)
-		{
-		    sIsThreadProvisioned = TRUE;
-		}
-		else
-		{
-			sIsThreadProvisioned = FALSE;
-		}
-	}
+    void AppTask::ThreadProvisioningHandler(const ChipDeviceEvent * event, intptr_t)
+    {
+    if (event->Type == DeviceEventType::kServiceProvisioningChange && event->ServiceProvisioningChange.IsServiceProvisioned)
+    {
+        if (event->ServiceProvisioningChange.IsServiceProvisioned)
+        {
+            sIsThreadProvisioned = TRUE;
+        }
+        else
+        {
+            sIsThreadProvisioned = FALSE;
+        }
+    }
 
     if (event->Type == DeviceEventType::kCHIPoBLEAdvertisingChange && event->CHIPoBLEAdvertisingChange.Result == kActivity_Stopped)
     {
@@ -689,18 +689,6 @@ void AppTask::OTAResumeEventHandler(AppEvent * aEvent)
     }
 }
 
-extern "C" void vApplicationIdleHook( void )
-{
-#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
-            OTA_TransactionResume();
-
-            if (shouldReset)
-            {
-                ResetMCU();
-            }
-#endif
-}
-
 void AppTask::PostEvent(const AppEvent * aEvent)
 {
     if (sAppEventQueue != NULL)
@@ -744,12 +732,12 @@ void AppTask::UpdateClusterStateInternal(intptr_t arg)
 
 void AppTask::UpdateDeviceState(void)
 {
-	bool onoffAttrValue  = 0;
+    bool onoffAttrValue  = 0;
 
-	/* get onoff attribute value */
-	(void)emberAfReadAttribute(1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID, CLUSTER_MASK_SERVER,
-			(uint8_t *) &onoffAttrValue, 1, NULL);
+    /* get onoff attribute value */
+    (void)emberAfReadAttribute(1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID, CLUSTER_MASK_SERVER,
+            (uint8_t *) &onoffAttrValue, 1, NULL);
 
-	/* set the device state */
-	sLightLED.Set(onoffAttrValue);
+    /* set the device state */
+    sLightLED.Set(onoffAttrValue);
 }
