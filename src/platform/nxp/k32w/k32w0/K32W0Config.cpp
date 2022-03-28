@@ -287,7 +287,7 @@ CHIP_ERROR K32WConfig::WriteConfigValueStr(Key key, const char * str, size_t str
 
     if (str != NULL)
     {
-        pData = (uint8_t *) pvPortMalloc(strLen + 1);
+        uint8_t *pData = (uint8_t *) pvPortMalloc(strLen + 1);
 
         if (pData != NULL)
         {
