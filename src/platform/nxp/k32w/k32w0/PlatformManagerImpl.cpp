@@ -34,7 +34,16 @@
 
 #include <openthread/platform/entropy.h>
 
+#ifdef CPU_K32W061HN
+#include "K32W061.h"
+#elif CPU_K32W041AMZ
 #include "K32W041AM.h"
+#elif CPU_K32W041AZ
+#include "K32W041A.h"
+#elif CPU_K32W041HN
+#include "K32W041.h"
+#endif
+
 
 namespace chip {
 namespace DeviceLayer {
@@ -62,7 +71,7 @@ CHIP_ERROR PlatformManagerImpl::_InitChipStack(void)
     err = Internal::K32WConfig::Init();
     SuccessOrExit(err);
 
-    if ((Chip_GetType() != CHIP_K32W061) && Chip_GetType() != CHIP_K32W041AM)
+    if ((Chip_GetType() != CHIP_K32W061) && Chip_GetType() != CHIP_K32W041AM && Chip_GetType() != CHIP_K32W041A && Chip_GetType() != CHIP_K32W041)
     {
         err = CHIP_ERROR_INTERNAL;
         ChipLogError(DeviceLayer, "Invalid chip type, expected K32W061");

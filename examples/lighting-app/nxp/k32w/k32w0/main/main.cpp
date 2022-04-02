@@ -56,6 +56,7 @@ typedef void (*InitFunc)(void);
 extern InitFunc __init_array_start;
 extern InitFunc __init_array_end;
 
+#define NORMAL_PWR        10    /* dBm */
 
 #ifdef K32WMCM_APP_BUILD
 /* Must be called before zps_eAplAfInit() */
@@ -65,18 +66,18 @@ void APP_SetHighTxPowerMode();
 void APP_SetMaxTxPower();
 
 #undef HIGH_TX_PWR_LIMIT
-#define HIGH_TX_PWR_LIMIT 15	/* dBm */
+#define HIGH_TX_PWR_LIMIT 15    /* dBm */
 /* High Tx power */
 void APP_SetHighTxPowerMode()
 {
-	if (CHIP_IS_HITXPOWER_CAPABLE())
-		vMMAC_SetTxPowerMode(TRUE);
+    if (CHIP_IS_HITXPOWER_CAPABLE())
+        vMMAC_SetTxPowerMode(TRUE);
 }
 
 void APP_SetMaxTxPower()
 {
-	if (CHIP_IS_HITXPOWER_CAPABLE())
-		eAppApiPlmeSet(PHY_PIB_ATTR_TX_POWER, HIGH_TX_PWR_LIMIT);
+    if (CHIP_IS_HITXPOWER_CAPABLE())
+        eAppApiPlmeSet(PHY_PIB_ATTR_TX_POWER, HIGH_TX_PWR_LIMIT);
 }
 #endif
 
@@ -126,8 +127,10 @@ extern "C" void main_task(void const * argument)
         goto exit;
     }
 
+    otPlatRadioSetTransmitPower(ThreadStackMgrImpl().OTInstance(), NORMAL_PWR);
 #ifdef K32WMCM_APP_BUILD
     APP_SetMaxTxPower();
+    otPlatRadioSetTransmitPower(ThreadStackMgrImpl().OTInstance(), HIGH_TX_PWR_LIMIT);
 #endif
 
     ret = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::kThreadDeviceType_MinimalEndDevice);

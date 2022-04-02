@@ -65,7 +65,7 @@ k32w0_sdk("sdk") {
 }
 
 k32w0_executable("light_app") {
-  output_name = "chip-k32w061-light-example"
+  output_name = "chip-k32w0x-light-example"
 
   sources = [
     "${k32w0_platform_dir}/util/LEDWidget.cpp",
@@ -123,10 +123,10 @@ k32w0_executable("light_app") {
 
 if (chip_pw_tokenizer_logging) {
   pw_tokenizer_database("light_app.database") {
-    database = "$root_build_dir/chip-k32w061-light-example-database.bin"
+    database = "$root_build_dir/chip-k32w0x-light-example-database.bin"
     create = "binary"
     deps = [ ":light_app" ]
-    optional_paths = [ "$root_build_dir/chip-k32w061-light-example" ]
+    optional_paths = [ "$root_build_dir/chip-k32w0x-light-example" ]
   }
 }
 
