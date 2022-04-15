@@ -36,10 +36,12 @@
 #include "FreeRtosHooks.h"
 #include "app_config.h"
 
-#include "radio.h"
+
+
+#ifdef K32WMCM_APP_BUILD
 #include "MMAC.h"
-#ifdef CPU_K32W041AMK
 #include "mac_sap.h"
+#include "AppApi.h"
 #endif
 
 using namespace ::chip;
@@ -101,19 +103,28 @@ uint8_t __attribute__((section(".heap"))) ucHeap[HEAP_SIZE];
 
 static char initString[] = "app";
 
-#define K32W041AM_MAX_TX_PWR 15 
-#define K32W061_MAX_TX_PWR 10
+#define NORMAL_PWR        10    /* dBm */
 
-/* CPU_K32W041AMK is defined in third_party/k32w_sdk.gni */
-#ifdef CPU_K32W041AMK
-/* Must be called before thread stack init*/
-//extern "C" void APP_SetHighTxPowerMode();
+#ifdef K32WMCM_APP_BUILD
+/* Must be called before zps_eAplAfInit() */
+void APP_SetHighTxPowerMode();
 
+/* Must be called after zps_eAplAfInit() */
+void APP_SetMaxTxPower();
+
+#undef HIGH_TX_PWR_LIMIT
+#define HIGH_TX_PWR_LIMIT 15    /* dBm */
 /* High Tx power */
-extern "C" void APP_SetHighTxPowerMode()
+void APP_SetHighTxPowerMode()
 {
     if (CHIP_IS_HITXPOWER_CAPABLE())
-    vMMAC_SetTxPowerMode(TRUE);
+        vMMAC_SetTxPowerMode(TRUE);
+}
+
+void APP_SetMaxTxPower()
+{
+    if (CHIP_IS_HITXPOWER_CAPABLE())
+        eAppApiPlmeSet(PHY_PIB_ATTR_TX_POWER, HIGH_TX_PWR_LIMIT);
 }
 #endif
 
@@ -158,7 +169,7 @@ extern "C" void main_task(void const * argument)
     // Init Chip memory management before the stack
     chip::Platform::MemoryInit();
 
-#ifdef CPU_K32W041AMK
+#ifdef K32WMCM_APP_BUILD
     APP_SetHighTxPowerMode();
 #endif
 
@@ -176,11 +187,10 @@ extern "C" void main_task(void const * argument)
         goto exit;
     }
 
-
-#if (defined CPU_K32W041AMK)
-    otPlatRadioSetTransmitPower(ThreadStackMgrImpl().OTInstance(), K32W041AM_MAX_TX_PWR);
-#elif (defined CPU_K32W061HN)
-    otPlatRadioSetTransmitPower(ThreadStackMgrImpl().OTInstance(), K32W061_MAX_TX_PWR);
+    otPlatRadioSetTransmitPower(ThreadStackMgrImpl().OTInstance(), NORMAL_PWR);
+#ifdef K32WMCM_APP_BUILD
+    APP_SetMaxTxPower();
+    otPlatRadioSetTransmitPower(ThreadStackMgrImpl().OTInstance(), HIGH_TX_PWR_LIMIT);
 #endif
 
 #if defined(cPWR_UsePowerDownMode) && (cPWR_UsePowerDownMode)

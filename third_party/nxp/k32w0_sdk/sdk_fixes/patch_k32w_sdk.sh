@@ -5,6 +5,8 @@ if [[ ! -d $NXP_K32W061_SDK_ROOT ]]; then
     exit 1
 fi
 
+board=$(ls "$NXP_K32W061_SDK_ROOT"/boards)
+
 convert_to_dos() {
 
     [[ $(file -b - <$1) != *"CRLF"* ]] && sed -i 's/$/\r/' "$1"
@@ -13,14 +15,14 @@ convert_to_dos() {
 SOURCE=${BASH_SOURCE[0]}
 SOURCE_DIR=$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)
 
-convert_to_dos "$NXP_K32W061_SDK_ROOT"/boards/k32w061dk6/wireless_examples/openthread/reed/bm/gpio_pins.h
-patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/boards/k32w061dk6/wireless_examples/openthread/reed/bm -p1 <"$SOURCE_DIR/gpio_pins_h.patch"
+convert_to_dos "$NXP_K32W061_SDK_ROOT"/boards/"$board"/wireless_examples/openthread/reed/bm/gpio_pins.h
+patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/boards/"$board"/wireless_examples/openthread/reed/bm -p1 <"$SOURCE_DIR/gpio_pins_h.patch"
 
-convert_to_dos "$NXP_K32W061_SDK_ROOT"/boards/k32w061dk6/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common/app_dual_mode_low_power.h
-patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/boards/k32w061dk6/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common -p1 <"$SOURCE_DIR/app_dual_mode_low_power_h.patch"
+convert_to_dos "$NXP_K32W061_SDK_ROOT"/boards/"$board"/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common/app_dual_mode_low_power.h
+patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/boards/"$board"/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common -p1 <"$SOURCE_DIR/app_dual_mode_low_power_h.patch"
 
-convert_to_dos "$NXP_K32W061_SDK_ROOT"/boards/k32w061dk6/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common/app_dual_mode_switch.h
-patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/boards/k32w061dk6/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common -p1 <"$SOURCE_DIR/app_dual_mode_switch_h.patch"
+convert_to_dos "$NXP_K32W061_SDK_ROOT"/boards/"$board"/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common/app_dual_mode_switch.h
+patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/boards/"$board"/wireless_examples/hybrid/ble_ot/lped_ble_wuart/ble_802_15_4_common -p1 <"$SOURCE_DIR/app_dual_mode_switch_h.patch"
 
 convert_to_dos "$NXP_K32W061_SDK_ROOT"/middleware/wireless/framework/SecLib/SecLib.h
 patch -N --binary -d "$NXP_K32W061_SDK_ROOT"/middleware/wireless/framework/SecLib -p1 <"$SOURCE_DIR/SecLib_h.patch"
