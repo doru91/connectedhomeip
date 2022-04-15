@@ -33,10 +33,18 @@
 #include <app-common/zap-generated/cluster-id.h>
 #include <app/util/attribute-storage.h>
 
+/* OTA related includes */
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+#include "OTAImageProcessorImpl.h"
+#include "OtaSupport.h"
+#include "platform/GenericOTARequestorDriver.h"
+#include "src/app/clusters/ota-requestor/BDXDownloader.h"
+#include "src/app/clusters/ota-requestor/OTARequestor.h"
+#endif
+
 #include "Keyboard.h"
 #include "LED.h"
 #include "LEDWidget.h"
-#include "TimersManager.h"
 #include "app_config.h"
 
 constexpr uint32_t kFactoryResetTriggerTimeout = 6000;
@@ -54,7 +62,6 @@ static LEDWidget sContactSensorLED;
 
 static bool sIsThreadProvisioned = false;
 static bool sHaveBLEConnections  = false;
-static bool sIsThreadEnabled = false;
 
 static uint32_t eventMask = 0;
 
@@ -64,8 +71,22 @@ extern "C" void K32WUartProcess(void);
 
 using namespace ::chip::Credentials;
 using namespace ::chip::DeviceLayer;
+using namespace chip;
+;
 
 AppTask AppTask::sAppTask;
+
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+/* OTA related variables */
+static OTARequestor gRequestorCore;
+DeviceLayer::GenericOTARequestorDriver gRequestorUser;
+static BDXDownloader gDownloader;
+static OTAImageProcessorImpl gImageProcessor;
+constexpr uint16_t requestedOtaBlockSize  = 1024;
+#endif
+
+extern "C" void ResetMCU(void);
+extern bool shouldReset;
 
 CHIP_ERROR AppTask::StartAppTask()
 {
@@ -91,10 +112,12 @@ CHIP_ERROR AppTask::Init()
     // Initialize device attestation config
     SetDeviceAttestationCredentialsProvider(Examples::GetExampleDACProvider());
 
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+    PlatformMgr().ScheduleWork(InitOTA, 0);
+#endif
+
     // QR code will be used with CHIP Tool
     PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
-
-    TMR_Init();
 
     /* HW init leds */
 #if !cPWR_UsePowerDownMode
@@ -158,6 +181,31 @@ CHIP_ERROR AppTask::Init()
     return err;
 }
 
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+void AppTask::InitOTA(intptr_t arg)
+{
+    // Initialize and interconnect the Requestor and Image Processor objects -- START
+    SetRequestorInstance(&gRequestorCore);
+
+    gRequestorCore.Init(&(chip::Server::GetInstance()), &gRequestorUser, &gDownloader);
+    gRequestorUser.SetMaxDownloadBlockSize(requestedOtaBlockSize);
+    gRequestorUser.Init(&gRequestorCore, &gImageProcessor);
+
+    // WARNING: this is probably not realistic to know such details of the image or to even have an OTADownloader instantiated at
+    // the beginning of program execution. We're using hardcoded values here for now since this is a reference application.
+    // TODO: instatiate and initialize these values when QueryImageResponse tells us an image is available
+    // TODO: add API for OTARequestor to pass QueryImageResponse info to the application to use for OTADownloader init
+    OTAImageProcessorParams ipParams;
+    ipParams.imageFile = CharSpan("test.txt");
+    gImageProcessor.SetOTAImageProcessorParams(ipParams);
+    gImageProcessor.SetOTADownloader(&gDownloader);
+
+    // Connect the gDownloader and Image Processor objects
+    gDownloader.SetImageProcessorDelegate(&gImageProcessor);
+    // Initialize and interconnect the Requestor and Image Processor objects -- END
+}
+#endif
+
 void AppTask::AppTaskMain(void * pvParameter)
 {
     AppEvent event;
@@ -194,8 +242,6 @@ void AppTask::AppTaskMain(void * pvParameter)
 #if CHIP_DEVICE_CONFIG_THREAD_ENABLE_CLI
             K32WUartProcess();
 #endif
-            sIsThreadProvisioned     = ConnectivityMgr().IsThreadProvisioned();
-            sIsThreadEnabled         = ConnectivityMgr().IsThreadEnabled();
             sHaveBLEConnections  = (ConnectivityMgr().NumBLEConnections() != 0);
             PlatformMgr().UnlockChipStack();
         }
@@ -238,7 +284,7 @@ void AppTask::AppTaskMain(void * pvParameter)
 
 void AppTask::ButtonEventHandler(uint8_t pin_no, uint8_t button_action)
 {
-    if ((pin_no != RESET_BUTTON) && (pin_no != CONTACT_SENSOR_BUTTON) && (pin_no != JOIN_BUTTON) && (pin_no != BLE_BUTTON))
+    if ((pin_no != RESET_BUTTON) && (pin_no != CONTACT_SENSOR_BUTTON) && (pin_no != OTA_BUTTON) && (pin_no != BLE_BUTTON))
     {
         return;
     }
@@ -256,9 +302,9 @@ void AppTask::ButtonEventHandler(uint8_t pin_no, uint8_t button_action)
     {
         button_event.Handler = ContactActionEventHandler;
     }
-    else if (pin_no == JOIN_BUTTON)
+    else if (pin_no == OTA_BUTTON)
     {
-        button_event.Handler = JoinHandler;
+        button_event.Handler = OTAHandler;
     }
     else if (pin_no == BLE_BUTTON)
     {
@@ -321,7 +367,7 @@ void AppTask::HandleKeyboard(void)
             ButtonEventHandler(CONTACT_SENSOR_BUTTON, CONTACT_SENSOR_BUTTON_PUSH);
             break;
         case gKBD_EventPB3_c:
-            ButtonEventHandler(JOIN_BUTTON, JOIN_BUTTON_PUSH);
+            ButtonEventHandler(OTA_BUTTON, OTA_BUTTON_PUSH);
             break;
         case gKBD_EventPB4_c:
             ButtonEventHandler(BLE_BUTTON, BLE_BUTTON_PUSH);
@@ -459,6 +505,7 @@ void AppTask::ContactActionEventHandler(void * aGenericEvent)
     }
 }
 
+#if 0
 void AppTask::ThreadStart()
 {
     chip::Thread::OperationalDataset dataset{};
@@ -499,6 +546,32 @@ void AppTask::JoinHandler(void * aGenericEvent)
      */
     ThreadStart();
 }
+#endif
+
+void AppTask::OTAHandler(void * aGenericEvent)
+{
+    AppEvent * aEvent = (AppEvent *) aGenericEvent;
+    if (aEvent->ButtonEvent.PinNo != OTA_BUTTON)
+        return;
+
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+    if (sAppTask.mFunction != kFunction_NoneSelected)
+    {
+        K32W_LOG("Another function is scheduled. Could not initiate OTA!");
+        return;
+    }
+
+    PlatformMgr().ScheduleWork(StartOTAQuery, 0);
+#endif
+}
+
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+void AppTask::StartOTAQuery(intptr_t arg)
+{
+    static_cast<OTARequestor *>(GetRequestorInstance())->TriggerImmediateQuery();
+}
+#endif
+
 
 void AppTask::BleHandler(void * aGenericEvent)
 {
@@ -675,6 +748,40 @@ void AppTask::PostContactActionRequest(int32_t aActor, ContactSensorManager::Act
     PostEvent(&event);
 }
 
+void AppTask::PostOTAResume()
+{
+    AppEvent event;
+    event.Type              = AppEvent::kEventType_OTAResume;
+    event.Handler           = OTAResumeEventHandler;
+    PostEvent(&event);
+}
+
+void AppTask::OTAResumeEventHandler(void * aGenericEvent)
+{
+    AppEvent * aEvent = (AppEvent *) aGenericEvent;
+    if (aEvent->Type == AppEvent::kEventType_OTAResume)
+    {
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+        if (gDownloader.GetState() == OTADownloader::State::kInProgress)
+        {
+            gImageProcessor.TriggerNewRequestForData();
+        }
+#endif
+    }
+}
+
+extern "C" void vApplicationIdleHook( void )
+{
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+    OTA_TransactionResume();
+
+    if (shouldReset)
+    {
+        ResetMCU();
+    }
+#endif
+}
+
 void AppTask::PostEvent(const AppEvent * aEvent)
 {
     portBASE_TYPE taskToWake = pdFALSE;
@@ -734,3 +841,16 @@ void AppTask::UpdateClusterStateInternal(intptr_t arg)
         ChipLogError(NotSpecified, "ERR: updating boolean status value %x", status);
     }
 }
+
+void AppTask::UpdateDeviceState(void)
+{
+    bool stateValueAttrValue  = 0;
+
+    /* get onoff attribute value */
+    (void)emberAfReadAttribute(1, ZCL_BOOLEAN_STATE_CLUSTER_ID, ZCL_STATE_VALUE_ATTRIBUTE_ID, CLUSTER_MASK_SERVER,
+            (uint8_t *) &stateValueAttrValue, 1, NULL);
+
+    /* set the device state */
+    sContactSensorLED.Set(stateValueAttrValue);
+}
+

@@ -52,9 +52,9 @@
 #define configMAX_PRIORITIES (8)
 
 #if defined(cPWR_UsePowerDownMode) && (cPWR_UsePowerDownMode)
-#define configMINIMAL_STACK_SIZE ((unsigned short) 250)
+#define configMINIMAL_STACK_SIZE ((unsigned short) 610)
 #else
-#define configMINIMAL_STACK_SIZE ((unsigned short) 90)
+#define configMINIMAL_STACK_SIZE ((unsigned short) 450)
 #endif
 
 #define configMAX_TASK_NAME_LEN 20
@@ -85,11 +85,7 @@
 #define configAPPLICATION_ALLOCATED_HEAP 1
 
 /* Hook function related definitions. */
-#if defined(cPWR_UsePowerDownMode) && (cPWR_UsePowerDownMode)
 #define configUSE_IDLE_HOOK 1
-#else
-#define configUSE_IDLE_HOOK 0
-#endif
 
 #define configUSE_TICK_HOOK 0
 #define configCHECK_FOR_STACK_OVERFLOW 0
@@ -114,7 +110,7 @@
 #define configUSE_TIMERS 1
 #define configTIMER_TASK_PRIORITY (configMAX_PRIORITIES - 1)
 #define configTIMER_QUEUE_LENGTH 10
-#define configTIMER_TASK_STACK_DEPTH (configMINIMAL_STACK_SIZE * 4)
+#define configTIMER_TASK_STACK_DEPTH (360)
 
 /* Define to trap errors during development. */
 #if defined gLoggingActive_d && (gLoggingActive_d != 0)

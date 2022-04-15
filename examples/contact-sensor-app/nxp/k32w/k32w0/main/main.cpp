@@ -41,6 +41,7 @@
 #ifdef CPU_K32W041AMK
 #include "mac_sap.h"
 #endif
+
 using namespace ::chip;
 using namespace ::chip::Inet;
 using namespace ::chip::DeviceLayer;
@@ -58,9 +59,15 @@ using namespace ::chip::Logging;
 #include "radio.h"
 #endif
 
+#include "RNG_Interface.h"
+#include "MemManager.h"
+#include "TimersManager.h"
+
 typedef void (*InitFunc)(void);
 extern InitFunc __init_array_start;
 extern InitFunc __init_array_end;
+
+extern "C" void boardFwkInit(void);
 
 /* low power requirements */
 #if defined(cPWR_UsePowerDownMode) && (cPWR_UsePowerDownMode)
@@ -92,6 +99,8 @@ static sDualModeAppStates dualModeStates;
 /* needed for FreeRtos Heap 4 */
 uint8_t __attribute__((section(".heap"))) ucHeap[HEAP_SIZE];
 
+static char initString[] = "app";
+
 #define K32W041AM_MAX_TX_PWR 15 
 #define K32W061_MAX_TX_PWR 10
 
@@ -110,6 +119,9 @@ extern "C" void APP_SetHighTxPowerMode()
 
 extern "C" void main_task(void const * argument)
 {
+    char *argv[1] = {0};
+    argv[0] = &initString[0];
+
     /* Call C++ constructors */
     InitFunc * pFunc = &__init_array_start;
     for (; pFunc < &__init_array_end; ++pFunc)
@@ -131,8 +143,11 @@ extern "C" void main_task(void const * argument)
 
     mbedtls_platform_set_calloc_free(CHIPPlatformMemoryCalloc, CHIPPlatformMemoryFree);
 
+    /* Initialize board framework services */
+    boardFwkInit();
+
     /* Used for HW initializations */
-    otSysInit(0, NULL);
+    otSysInit(1, argv);
 
     K32W_LOG("Welcome to NXP Contact Sensor Demo App");
 
@@ -150,7 +165,7 @@ extern "C" void main_task(void const * argument)
     CHIP_ERROR ret = PlatformMgr().InitChipStack();
     if (ret != CHIP_NO_ERROR)
     {
-        K32W_LOG("Error during PlatformMgr().InitWeaveStack()");
+        K32W_LOG("Error during PlatformMgr().InitChipStack()");
         goto exit;
     }
 
@@ -223,6 +238,18 @@ extern "C" void otSysEventSignalPending(void)
         portYIELD_FROM_ISR(yieldRequired);
     }
 }
+
+extern "C" void boardFwkInit(void)
+{
+    MEM_Init();
+
+    /* RNG initialization and PRNG initial seeding */
+    (void) RNG_Init();
+    RNG_SetPseudoRandomNoSeed(NULL);
+
+    TMR_Init();
+}
+
 
 #if defined(cPWR_UsePowerDownMode) && (cPWR_UsePowerDownMode)
 uint32_t dm_switch_get15_4InitWakeUpTime(void)

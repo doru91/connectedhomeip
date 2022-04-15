@@ -32,6 +32,7 @@ struct AppEvent
 #if defined(cPWR_UsePowerDownMode) && (cPWR_UsePowerDownMode)
         kEventType_Lp,
 #endif
+        kEventType_OTAResume,
     };
 
     AppEventTypes Type;

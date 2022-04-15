@@ -36,9 +36,11 @@ public:
     static void AppTaskMain(void * pvParameter);
 
     void PostContactActionRequest(int32_t aActor, ContactSensorManager::Action_t aAction);
+    void PostOTAResume();
     void PostEvent(const AppEvent * event);
 
     void UpdateClusterState(void);
+    void UpdateDeviceState(void);
 
 private:
     friend AppTask & GetAppTask(void);
@@ -55,9 +57,11 @@ private:
     static void FunctionTimerEventHandler(void * aGenericEvent);
     static void KBD_Callback(uint8_t events);
     static void HandleKeyboard(void);
+    static void OTAHandler(void * aGenericEvent);
     static void JoinHandler(void * aGenericEvent);
     static void BleHandler(void * aGenericEvent);
     static void ContactActionEventHandler(void * aGenericEvent);
+    static void OTAResumeEventHandler(void * aGenericEvent);
     static void ResetActionEventHandler(void * aGenericEvent);
     static void InstallEventHandler(void * aGenericEvent);
 
@@ -70,6 +74,11 @@ private:
 
     static void ThreadStart();
     void StartTimer(uint32_t aTimeoutInMs);
+
+#if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
+    static void InitOTA(intptr_t arg);
+    static void StartOTAQuery(intptr_t arg);
+#endif
 
     enum Function_t
     {
