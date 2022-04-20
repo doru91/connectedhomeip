@@ -849,8 +849,9 @@ void AppTask::UpdateDeviceState(void)
     /* get onoff attribute value */
     (void)emberAfReadAttribute(1, ZCL_BOOLEAN_STATE_CLUSTER_ID, ZCL_STATE_VALUE_ATTRIBUTE_ID, CLUSTER_MASK_SERVER,
             (uint8_t *) &stateValueAttrValue, 1, NULL);
-
+#if !cPWR_UsePowerDownMode
     /* set the device state */
     sContactSensorLED.Set(stateValueAttrValue);
+#endif
 }
 

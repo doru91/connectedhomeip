@@ -228,9 +228,9 @@ static void BOARD_ActionOnIdle(void)
 #endif
 }
 
-void vApplicationIdleHook(void)
-{
-    BOARD_ActionOnIdle();
-}
+//void vApplicationIdleHook(void)
+//{
+//    BOARD_ActionOnIdle();
+//}
 
 #endif /*  (cPWR_UsePowerDownMode) && (configUSE_TICKLESS_IDLE != 0) */
