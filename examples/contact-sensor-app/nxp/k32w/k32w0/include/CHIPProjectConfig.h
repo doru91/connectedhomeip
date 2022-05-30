@@ -60,7 +60,7 @@
 /**
  * CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_ID
  *
- * 0x8006: example lock-app
+ * 0x8006: example contact sensor
  */
 #define CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_ID 0x8006
 

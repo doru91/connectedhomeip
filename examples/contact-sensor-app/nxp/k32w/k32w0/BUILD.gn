@@ -113,6 +113,7 @@ k32w0_executable("contact_sensor_app") {
          "-Wl,__app_load_address__=0x4000",
          "-Wl,--defsym",
          "-Wl,__app_stated_size__=0x99A00",
+         "-Wl,-print-memory-usage",
     ]
   }
 }
