@@ -47,5 +47,10 @@ convert_to_dos "$SIGN_FILE_PATH"
 patch -N --binary -d "$NXP_K32W0_SDK_ROOT"/tools/imagetool/ -p1 <"$SOURCE_DIR/sign_images_sh.patch"
 sed -i 's/\r$//' "$SIGN_FILE_PATH"
 
+
+cp ./third_party/nxp/k32w0_sdk/sdk_fixes/gpio_pins.h "$NXP_K32W0_SDK_ROOT"/boards/"$board"/wireless_examples/openthread/reed/bm/gpio_pins.h
+cp ./third_party/nxp/k32w0_sdk/sdk_fixes/pin_mux.c "$NXP_K32W0_SDK_ROOT"/boards/"$board"/wireless_examples/openthread/reed/bm/pin_mux.c
+echo "cp gpio_pins.h pin_mux.c to reed/bm for lumi's harware"
+
 echo "K32W SDK MR3 QP1 was patched!"
 exit 0

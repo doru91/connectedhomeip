@@ -251,6 +251,7 @@ extern "C" void otSysEventSignalPending(void)
 
 extern "C" void boardFwkInit(void)
 {
+    BOARD_InitPins();
     MEM_Init();
 
     /* RNG initialization and PRNG initial seeding */

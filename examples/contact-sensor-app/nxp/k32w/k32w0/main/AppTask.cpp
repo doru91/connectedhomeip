@@ -46,6 +46,8 @@
 #include "LED.h"
 #include "LEDWidget.h"
 #include "app_config.h"
+#include "gpio_pins.h"
+#include "fsl_gpio.h"
 
 constexpr uint32_t kFactoryResetTriggerTimeout = 6000;
 constexpr uint8_t kAppEventQueueSize           = 10;
@@ -72,9 +74,30 @@ extern "C" void K32WUartProcess(void);
 using namespace ::chip::Credentials;
 using namespace ::chip::DeviceLayer;
 using namespace chip;
-;
+
+#define PIN_IS_LOW(PIN_NUM) ((((GPIO_PortRead(GPIO,0) & (1<< PIN_NUM)) ^0) & (1<< PIN_NUM)) == 0)
+#define PIN_IS_HIGH(PIN_NUM) ((((GPIO_PortRead(GPIO,0) & (1<< PIN_NUM)) ^0) & (1<< PIN_NUM)) == (1<< PIN_NUM))
+
 
 AppTask AppTask::sAppTask;
+
+#ifdef LUMI_DOORLOCK
+#define DITHERING_TIME_MS 100
+
+TimerHandle_t sDitheringTimer;
+
+
+gpioInputPinConfig_t alert = {
+        .gpioPort = gpioPort_A_c,
+        .gpioPin = BOARD_DOORLOCK_ALERT_PIN,
+        .pullSelect = pinPull_Up_c,
+        //.pullSelect = pinPull_Disabled_c,
+        .interruptModeSelect = pinInt_EitherEdge_c,
+        .pinIntSelect = kPINT_PinInt1,
+        .inputmux_attach_id = (inputmux_connection_t)INPUTMUX_GpioPortPinToPintsel(0,BOARD_DOORLOCK_ALERT_PIN),
+        .is_wake_source = true
+    };
+#endif
 
 #if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
 /* OTA related variables */
@@ -125,6 +148,7 @@ CHIP_ERROR AppTask::Init()
 
     /* start with all LEDS turnedd off */
     sStatusLED.Init(SYSTEM_STATE_LED);
+    sStatusLED.Set(false);
 
     sContactSensorLED.Init(CONTACT_SENSOR_STATE_LED);
     sContactSensorLED.Set(!ContactSensorMgr().IsUnlocked());
@@ -133,6 +157,11 @@ CHIP_ERROR AppTask::Init()
 
     /* intialize the Keyboard and button press calback */
     KBD_Init(KBD_Callback);
+
+#ifdef LUMI_DOORLOCK
+    GpioInputPinInit(&alert,1);
+    GpioInstallIsr(PINT_Callback,gGpioIsrPrioLow_c,0x80,&alert);
+#endif
 
     // Create FreeRTOS sw timer for Function Selection.
     sFunctionTimer = xTimerCreate("FnTmr",          // Just a text name, not used by the RTOS kernel
@@ -147,6 +176,20 @@ CHIP_ERROR AppTask::Init()
         assert(err == CHIP_NO_ERROR);
     }
 
+#ifdef LUMI_DOORLOCK
+    // Create FreeRTOS sw timer for sensor input dithering.
+    sDitheringTimer = xTimerCreate("DitheringTmr",          // Just a text name, not used by the RTOS kernel
+                                  1,                // == default timer period (mS)
+                                  false,            // no timer reload (==one-shot)
+                                  (void *) this,    // init timer id = app task obj context
+                                  DitheringTimerEventHandler // timer callback handler
+    );
+    if (sDitheringTimer == NULL)
+    {
+        K32W_LOG("app_timer_create() failed");
+        assert(err == CHIP_NO_ERROR);
+    }
+#endif
 
     int status = ContactSensorMgr().Init();
     if (status != 0)
@@ -264,16 +307,17 @@ void AppTask::AppTaskMain(void * pvParameter)
         {
             if (sIsThreadProvisioned)
             {
-                sStatusLED.Blink(950, 50);
+                //sStatusLED.Blink(950, 50);
+                sStatusLED.Set(false);
             }
             else if (sHaveBLEConnections)
             {
                 sStatusLED.Blink(100, 100);
             }
-            else
-            {
-                sStatusLED.Blink(50, 950);
-            }
+            //else
+            //{
+            //    sStatusLED.Blink(50, 950);
+            //}
         }
 
         sStatusLED.Animate();
@@ -466,6 +510,7 @@ void AppTask::ContactActionEventHandler(void * aGenericEvent)
     int32_t actor  = 0;
     bool initiated = false;
 
+    K32W_LOG("mFunction:%d\n", sAppTask.mFunction);
     if (sAppTask.mFunction != kFunction_NoneSelected)
     {
         K32W_LOG("Another function is scheduled. Could not initiate Lock/Unlock!");
@@ -476,6 +521,7 @@ void AppTask::ContactActionEventHandler(void * aGenericEvent)
     {
         action = static_cast<ContactSensorManager::Action_t>(aEvent->ContactEvent.Action);
         actor  = aEvent->ContactEvent.Actor;
+        K32W_LOG("kEventType_Contact action:%x \n", action);
     }
     else if (aEvent->Type == AppEvent::kEventType_Button)
     {
@@ -488,6 +534,26 @@ void AppTask::ContactActionEventHandler(void * aGenericEvent)
             action = ContactSensorManager::UNLOCK_ACTION;
         }
     }
+#ifdef LUMI_DOORLOCK
+    else if(aEvent->Type == AppEvent::kEventType_Dithering)
+    {
+        // timer is not active, change its period to required value (== restart).
+        // FreeRTOS- Block for a maximum of 100 ticks if the change period command
+        // cannot immediately be sent to the timer command queue.
+        if(xTimerIsTimerActive(sDitheringTimer))
+        {
+            K32W_LOG("dithering timer already started"); 
+            xTimerStop(sDitheringTimer,0);
+        }
+        K32W_LOG("check 1");
+        if (xTimerChangePeriod(sDitheringTimer, DITHERING_TIME_MS/ portTICK_PERIOD_MS, 100) != pdPASS)
+        {
+            K32W_LOG("dithering timer start() failed");
+        }
+        K32W_LOG("dithering timer start()");
+        return;
+    }
+#endif
     else
     {
         err    = CHIP_ERROR_INTERNAL;
@@ -697,7 +763,7 @@ void AppTask::ActionInitiated(ContactSensorManager::Action_t aAction, int32_t aA
         K32W_LOG("Unlock Action has been initiated")
     }
 
-    if (aActor == AppEvent::kEventType_Button)
+    if ((aActor == AppEvent::kEventType_Button) || (aActor == AppEvent::kEventType_Contact))
     {
         sAppTask.mSyncClusterToButtonAction = true;
     }
@@ -854,4 +920,62 @@ void AppTask::UpdateDeviceState(void)
     sContactSensorLED.Set(stateValueAttrValue);
 #endif
 }
+
+
+#ifdef LUMI_DOORLOCK
+void AppTask::CheckFactoryNewReset()
+{
+     //uint32_t u32ReadPinsInput;
+     //u32ReadPinsInput = GPIO_PortRead(GPIO,0);
+     //if(((( u32ReadPinsInput & (1<< IOCON_USER_BUTTON1_PIN)) ^0) & (1<< IOCON_USER_BUTTON1_PIN)) == 0)
+     if(PIN_IS_LOW(IOCON_USER_BUTTON1_PIN))
+     {
+         K32W_LOG("Device will factory reset...");
+         PDM_Init();
+         PDM_vDeleteAllDataRecords();
+         
+         ConfigurationMgr().InitiateFactoryReset();
+         //RESET_SystemReset();
+     }
+}
+
+void AppTask::PostDitheringTimerEvent()
+{
+    AppEvent event;
+    event.Type              = AppEvent::kEventType_Dithering;
+    event.Handler = ContactActionEventHandler;
+    sAppTask.PostEvent(&event);
+}
+
+void AppTask::PINT_Callback()
+{
+    //K32W_LOG("PINT_Callback : 0x%x 0x%x",pintr,pmatch_status);
+    if(GpioIsPinIntPending(&alert)) 
+    {
+       GpioClearPinIntFlag(&alert);
+    }
+   
+    K32W_LOG("PINT_Callback");
+    sAppTask.PostDitheringTimerEvent();
+}
+
+
+void AppTask::DitheringTimerEventHandler(TimerHandle_t xTimer)
+{
+    if(PIN_IS_LOW(BOARD_DOORLOCK_ALERT_PIN))
+    {
+        if(ConnectivityMgr().IsThreadProvisioned())
+          sAppTask.PostContactActionRequest(AppEvent::kEventType_Contact, ContactSensorManager::LOCK_ACTION);
+        K32W_LOG("lock detected");
+    }
+    else 
+    {
+        if(ConnectivityMgr().IsThreadProvisioned())
+          sAppTask.PostContactActionRequest(AppEvent::kEventType_Contact, ContactSensorManager::UNLOCK_ACTION);
+        K32W_LOG("unlock detected");
+    }
+}
+#endif
+
+
 

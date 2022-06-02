@@ -41,6 +41,10 @@ public:
 
     void UpdateClusterState(void);
     void UpdateDeviceState(void);
+    
+#ifdef LUMI_DOORLOCK
+    void CheckFactoryNewReset();
+#endif
 
 private:
     friend AppTask & GetAppTask(void);
@@ -79,6 +83,12 @@ private:
     static void InitOTA(intptr_t arg);
     static void StartOTAQuery(intptr_t arg);
 #endif
+#ifdef LUMI_DOORLOCK
+    static void PINT_Callback();
+    static void PostDitheringTimerEvent();
+    static void DitheringTimerEventHandler(TimerHandle_t xTimer);
+#endif
+
 
     enum Function_t
     {

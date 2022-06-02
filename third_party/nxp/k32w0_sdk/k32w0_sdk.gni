@@ -21,8 +21,10 @@ import("${chip_root}/src/platform/nxp/k32w/k32w0/args.gni")
 declare_args() {
   # Location of the k32w0 SDK.
   k32w0_sdk_root = getenv("NXP_K32W0_SDK_ROOT")
-  chip_with_DK6 = true
+  chip_with_DK6 = false
   chip_with_OM15082 = 0
+  chip_with_LUMI_HW = false
+  LUMI_HW_board = ""
   chip_with_ot_cli = 0
   chip_with_low_power = 0
   mbedtls_use_tinycrypt = false
@@ -53,8 +55,32 @@ template("k32w0_sdk") {
   }
 
   assert(k32w0_sdk_root != "", "k32w0_sdk_root must be specified")
+  if(chip_with_DK6 == false && chip_with_LUMI_HW == false)
+  {
+    chip_with_DK6 = true
+  }
+  
+  if(chip_with_DK6 == true)
+  {
+    assert(chip_with_DK6 == true && chip_with_LUMI_HW == false, "Please build for only one Hardware")
+  }
+
+  if(chip_with_LUMI_HW == true)
+  {
+    assert(chip_with_LUMI_HW == true && chip_with_DK6 == false, "Please build for only one Hardware")
+  }
+  
   assert(chip_with_OM15082 == 0 || chip_with_DK6,
          "OM15082 expansion board is only supported on DK6 board")
+         
+  assert(LUMI_HW_board == "" || chip_with_LUMI_HW, 
+         "sensor board is only supported on lumi board")
+         
+  print("chip_with_DK6:", chip_with_DK6)
+  print("chip_with_LUMI_HW:", chip_with_LUMI_HW)
+  print("chip_with_OM15082:", chip_with_OM15082)
+  print("LUMI_HW_board:", LUMI_HW_board)
+  
   assert(
       chip_with_low_power == 0 ||
           (chip_with_low_power == 1 && chip_with_OM15082 == 0 &&
@@ -113,7 +139,7 @@ template("k32w0_sdk") {
     # we will add them to cflags below instead.
     _sdk_include_dirs = []
 
-    if (chip_with_DK6) {
+    if (chip_with_DK6 || chip_with_LUMI_HW) {
       if (chip_with_low_power != 0) {
         _sdk_include_dirs += [
           "${k32w0_sdk_root}/boards/${board}/wireless_examples/openthread/lped/bm",
@@ -265,7 +291,7 @@ template("k32w0_sdk") {
       ]
     }
 
-    if (chip_with_DK6) {
+    if (chip_with_DK6 || chip_with_LUMI_HW) {
       defines += [
         "gUsePdm_d=1",
         "PDM_EXT_FLASH=1",
@@ -273,25 +299,47 @@ template("k32w0_sdk") {
         "gPdmNbSegments=63",
       ]
 
+      if(LUMI_HW_board == "LUMI_DOORLOCK") {
+        defines += [
+          "LUMI_DOORLOCK",
+          "gKeyBoardSupported_d=1",
+          "gKBD_KeysCount_c=1",
+        ]
+      }
+
+      if(LUMI_HW_board == "LUMI_OCCUPANCYSENSOR") {
+        defines += [
+          "LUMI_OCCUPANCYSENSOR",
+          "gKeyBoardSupported_d=1",
+          "gKBD_KeysCount_c=1",
+        ]
+      }
+
       if (chip_with_OM15082 != 0) {
         defines += [
           "OM15082=1",
           "gKeyBoardSupported_d=1",
           "gKBD_KeysCount_c=4",
         ]
-      } else {
-        defines += [
-          "gKeyBoardSupported_d=1",
-          "gKBD_KeysCount_c=1",
-        ]
       }
 
       if (chip_with_low_power == 0) {
-        defines += [
-          "gLEDSupported_d=1",
-          "gLEDsOnTargetBoardCnt_c=2",
-          "gLED_InvertedMode_d=1",
-        ]
+
+        if (chip_with_OM15082 != 0) {
+          defines += [
+            "gLEDSupported_d=1",
+            "gLEDsOnTargetBoardCnt_c=2",
+            "gLED_InvertedMode_d=1",
+          ]
+        }
+        else
+        {
+          defines += [
+            "gLEDSupported_d=1",
+            "gLEDsOnTargetBoardCnt_c=2",
+            "gLED_InvertedMode_d=0",
+          ]
+        }
       }
     }
 
@@ -456,7 +504,7 @@ template("k32w0_sdk") {
       "${k32w0_sdk_root}/rtos/amazon-freertos/lib/FreeRTOS/timers.c",
     ]
 
-    if (chip_with_DK6) {
+    if (chip_with_DK6 || chip_with_LUMI_HW) {
       if (chip_with_low_power != 0) {
         sources += [
           "${k32w0_sdk_root}/boards/${board}/wireless_examples/openthread/lped/bm/board.c",

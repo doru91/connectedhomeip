@@ -23,10 +23,21 @@
 #include "FreeRTOS.h"
 
 #include "app_config.h"
+#ifdef LUMI_DOORLOCK
+#include "si7210/si7210_defs.h"
+#endif
 
 ContactSensorManager ContactSensorManager::sContactSensor;
 
 TimerHandle_t sContactSensorTimer; // FreeRTOS app sw timer.
+
+#ifdef LUMI_DOORLOCK
+extern "C" {
+   si7210_status_t doorlockInit(); 
+   si7210_status_t doorlockRead(float* field_strength, float* temperature);
+}
+#endif
+
 
 int ContactSensorManager::Init()
 {
@@ -46,6 +57,11 @@ int ContactSensorManager::Init()
         K32W_LOG("contact sensor timer create failed");
         assert(0);
     }
+
+#ifdef LUMI_DOORLOCK
+        //init doorlock driver
+        doorlockInit();
+#endif
 
     mState              = kState_LockingCompleted;
 

@@ -33,6 +33,9 @@ struct AppEvent
         kEventType_Lp,
 #endif
         kEventType_OTAResume,
+#ifdef LUMI_DOORLOCK
+        kEventType_Dithering,
+#endif
     };
 
     AppEventTypes Type;

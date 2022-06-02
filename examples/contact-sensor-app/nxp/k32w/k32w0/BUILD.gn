@@ -44,6 +44,7 @@ k32w0_sdk("sdk") {
 
   include_dirs = [
     "main/include",
+    "main/si7210",
     "main",
     "include",
     "${k32w0_platform_dir}/app/support",
@@ -71,6 +72,12 @@ k32w0_executable("contact_sensor_app") {
     "main/include/AppTask.h",
     "main/include/ContactSensorManager.h",
     "main/main.cpp",
+    "main/si7210/doorlock.c",
+    "main/si7210/si7210.c",
+    "main/si7210/si7210.h",
+    "main/si7210/si7210_defs.h",
+    "main/si7210/SMBus.c",
+    "main/si7210/SMBus.h",
   ]
 
   deps = [
