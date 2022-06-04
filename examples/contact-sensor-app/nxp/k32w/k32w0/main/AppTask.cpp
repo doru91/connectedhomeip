@@ -64,6 +64,8 @@ static LEDWidget sContactSensorLED;
 
 static bool sIsThreadProvisioned = false;
 static bool sHaveBLEConnections  = false;
+//static bool sIsThreadEnabled         = false;
+
 
 static uint32_t eventMask = 0;
 
@@ -151,7 +153,8 @@ CHIP_ERROR AppTask::Init()
     sStatusLED.Set(false);
 
     sContactSensorLED.Init(CONTACT_SENSOR_STATE_LED);
-    sContactSensorLED.Set(!ContactSensorMgr().IsUnlocked());
+    sContactSensorLED.Set(ContactSensorMgr().IsUnlocked());
+    
 #endif
     UpdateClusterState();
 
@@ -285,6 +288,9 @@ void AppTask::AppTaskMain(void * pvParameter)
 #if CHIP_DEVICE_CONFIG_THREAD_ENABLE_CLI
             K32WUartProcess();
 #endif
+            sIsThreadProvisioned     = ConnectivityMgr().IsThreadProvisioned();
+            //sIsThreadEnabled         = ConnectivityMgr().IsThreadEnabled();
+
             sHaveBLEConnections  = (ConnectivityMgr().NumBLEConnections() != 0);
             PlatformMgr().UnlockChipStack();
         }
