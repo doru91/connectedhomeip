@@ -50600,14 +50600,6 @@ class JointFabricDatastore(Cluster):
             # enum value. This specific value should never be transmitted.
             kUnknownEnumValue = 4
 
-        class FailureCodeEnum(MatterIntEnum):
-            kOk = 0x00
-            # All received enum values that are not listed above will be mapped
-            # to kUnknownEnumValue. This is a helper enum value that should only
-            # be used by code to process how it handles receiving an unknown
-            # enum value. This specific value should never be transmitted.
-            kUnknownEnumValue = 1
-
         class GroupKeySecurityPolicyEnum(MatterIntEnum):
             kTrustFirst = 0x00
             kCacheAndSync = 0x01
@@ -50626,12 +50618,12 @@ class JointFabricDatastore(Cluster):
                     Fields=[
                         ClusterObjectFieldDescriptor(Label="state", Tag=0, Type=JointFabricDatastore.Enums.DatastoreStateEnum),
                         ClusterObjectFieldDescriptor(Label="updateTimestamp", Tag=1, Type=typing.Union[Nullable, uint]),
-                        ClusterObjectFieldDescriptor(Label="failureCode", Tag=2, Type=JointFabricDatastore.Enums.FailureCodeEnum),
+                        ClusterObjectFieldDescriptor(Label="failureCode", Tag=2, Type=uint),
                     ])
 
             state: 'JointFabricDatastore.Enums.DatastoreStateEnum' = 0
             updateTimestamp: 'typing.Union[Nullable, uint]' = NullValue
-            failureCode: 'JointFabricDatastore.Enums.FailureCodeEnum' = 0
+            failureCode: 'uint' = 0
 
         @dataclass
         class DatastoreNodeKeyEntry(ClusterObject):

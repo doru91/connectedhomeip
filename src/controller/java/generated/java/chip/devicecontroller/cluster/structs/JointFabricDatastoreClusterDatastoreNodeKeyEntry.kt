@@ -17,17 +17,20 @@
 package chip.devicecontroller.cluster.structs
 
 import chip.devicecontroller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class JointFabricDatastoreClusterDatastoreNodeKeyEntry(
-  val nodeID: ULong,
-  val groupKeySetId: UInt,
-  val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry,
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class JointFabricDatastoreClusterDatastoreNodeKeyEntry (
+    val nodeID: ULong,
+    val groupKeySetId: UInt,
+    val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry) {
+  override fun toString(): String  = buildString {
     append("JointFabricDatastoreClusterDatastoreNodeKeyEntry {\n")
     append("\tnodeID : $nodeID\n")
     append("\tgroupKeySetId : $groupKeySetId\n")
@@ -50,19 +53,12 @@ class JointFabricDatastoreClusterDatastoreNodeKeyEntry(
     private const val TAG_GROUP_KEY_SET_ID = 1
     private const val TAG_STATUS_ENTRY = 2
 
-    fun fromTlv(
-      tlvTag: Tag,
-      tlvReader: TlvReader,
-    ): JointFabricDatastoreClusterDatastoreNodeKeyEntry {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : JointFabricDatastoreClusterDatastoreNodeKeyEntry {
       tlvReader.enterStructure(tlvTag)
       val nodeID = tlvReader.getULong(ContextSpecificTag(TAG_NODE_ID))
       val groupKeySetId = tlvReader.getUInt(ContextSpecificTag(TAG_GROUP_KEY_SET_ID))
-      val statusEntry =
-        JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(
-          ContextSpecificTag(TAG_STATUS_ENTRY),
-          tlvReader,
-        )
-
+      val statusEntry = JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(ContextSpecificTag(TAG_STATUS_ENTRY), tlvReader)
+      
       tlvReader.exitContainer()
 
       return JointFabricDatastoreClusterDatastoreNodeKeyEntry(nodeID, groupKeySetId, statusEntry)

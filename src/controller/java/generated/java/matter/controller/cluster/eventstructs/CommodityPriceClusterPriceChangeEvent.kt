@@ -16,7 +16,9 @@
  */
 package matter.controller.cluster.eventstructs
 
+import java.util.Optional
 import matter.controller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
 import matter.tlv.TlvReader
@@ -42,14 +44,10 @@ class CommodityPriceClusterPriceChangeEvent(
   companion object {
     private const val TAG_CURRENT_PRICE = 0
 
-    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): CommodityPriceClusterPriceChangeEvent {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : CommodityPriceClusterPriceChangeEvent {
       tlvReader.enterStructure(tlvTag)
-      val currentPrice =
-        matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct.fromTlv(
-          ContextSpecificTag(TAG_CURRENT_PRICE),
-          tlvReader,
-        )
-
+      val currentPrice = matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct.fromTlv(ContextSpecificTag(TAG_CURRENT_PRICE), tlvReader)
+      
       tlvReader.exitContainer()
 
       return CommodityPriceClusterPriceChangeEvent(currentPrice)

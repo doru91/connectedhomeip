@@ -17,18 +17,21 @@
 package chip.devicecontroller.cluster.structs
 
 import chip.devicecontroller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class JointFabricDatastoreClusterDatastoreAdministratorInformationEntry(
-  val nodeID: ULong,
-  val friendlyName: String,
-  val vendorID: UInt,
-  val icac: ByteArray,
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class JointFabricDatastoreClusterDatastoreAdministratorInformationEntry (
+    val nodeID: ULong,
+    val friendlyName: String,
+    val vendorID: UInt,
+    val icac: ByteArray) {
+  override fun toString(): String  = buildString {
     append("JointFabricDatastoreClusterDatastoreAdministratorInformationEntry {\n")
     append("\tnodeID : $nodeID\n")
     append("\tfriendlyName : $friendlyName\n")
@@ -54,24 +57,16 @@ class JointFabricDatastoreClusterDatastoreAdministratorInformationEntry(
     private const val TAG_VENDOR_ID = 3
     private const val TAG_ICAC = 4
 
-    fun fromTlv(
-      tlvTag: Tag,
-      tlvReader: TlvReader,
-    ): JointFabricDatastoreClusterDatastoreAdministratorInformationEntry {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : JointFabricDatastoreClusterDatastoreAdministratorInformationEntry {
       tlvReader.enterStructure(tlvTag)
       val nodeID = tlvReader.getULong(ContextSpecificTag(TAG_NODE_ID))
       val friendlyName = tlvReader.getString(ContextSpecificTag(TAG_FRIENDLY_NAME))
       val vendorID = tlvReader.getUInt(ContextSpecificTag(TAG_VENDOR_ID))
       val icac = tlvReader.getByteArray(ContextSpecificTag(TAG_ICAC))
-
+      
       tlvReader.exitContainer()
 
-      return JointFabricDatastoreClusterDatastoreAdministratorInformationEntry(
-        nodeID,
-        friendlyName,
-        vendorID,
-        icac,
-      )
+      return JointFabricDatastoreClusterDatastoreAdministratorInformationEntry(nodeID, friendlyName, vendorID, icac)
     }
   }
 }

@@ -16,6 +16,7 @@
  */
 package matter.controller.cluster.eventstructs
 
+import java.util.Optional
 import matter.controller.cluster.*
 import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
@@ -24,8 +25,7 @@ import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
 class CommodityPriceClusterForecastChangeEvent(
-  val priceForecast:
-    List<matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct>
+  val priceForecast: List<matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct>
 ) {
   override fun toString(): String = buildString {
     append("CommodityPriceClusterForecastChangeEvent {\n")
@@ -48,22 +48,16 @@ class CommodityPriceClusterForecastChangeEvent(
   companion object {
     private const val TAG_PRICE_FORECAST = 0
 
-    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): CommodityPriceClusterForecastChangeEvent {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : CommodityPriceClusterForecastChangeEvent {
       tlvReader.enterStructure(tlvTag)
-      val priceForecast =
-        buildList<matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct> {
-          tlvReader.enterArray(ContextSpecificTag(TAG_PRICE_FORECAST))
-          while (!tlvReader.isEndOfContainer()) {
-            this.add(
-              matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct.fromTlv(
-                AnonymousTag,
-                tlvReader,
-              )
-            )
-          }
-          tlvReader.exitContainer()
+      val priceForecast = buildList <matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct> {
+        tlvReader.enterArray(ContextSpecificTag(TAG_PRICE_FORECAST))
+        while(!tlvReader.isEndOfContainer()) {
+          this.add(matter.controller.cluster.structs.CommodityPriceClusterCommodityPriceStruct.fromTlv(AnonymousTag, tlvReader))
         }
-
+        tlvReader.exitContainer()
+      }
+      
       tlvReader.exitContainer()
 
       return CommodityPriceClusterForecastChangeEvent(priceForecast)

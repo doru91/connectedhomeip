@@ -11001,10 +11001,6 @@ cluster JointFabricDatastore = 1874 {
     kCommitFailed = 3;
   }
 
-  enum FailureCodeEnum : enum8 {
-    kOK = 0;
-  }
-
   enum GroupKeySecurityPolicyEnum : enum8 {
     kTrustFirst = 0;
     kCacheAndSync = 1;
@@ -11013,7 +11009,7 @@ cluster JointFabricDatastore = 1874 {
   struct DatastoreStatusEntry {
     DatastoreStateEnum state = 0;
     nullable epoch_us updateTimestamp = 1;
-    FailureCodeEnum failureCode = 2;
+    status failureCode = 2;
   }
 
   struct DatastoreNodeKeyEntry {

@@ -17,18 +17,21 @@
 package chip.devicecontroller.cluster.structs
 
 import chip.devicecontroller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class JointFabricDatastoreClusterDatastoreEndpointEntry(
-  val endpointID: UInt,
-  val nodeID: ULong,
-  val friendlyName: String,
-  val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry,
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class JointFabricDatastoreClusterDatastoreEndpointEntry (
+    val endpointID: UInt,
+    val nodeID: ULong,
+    val friendlyName: String,
+    val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry) {
+  override fun toString(): String  = buildString {
     append("JointFabricDatastoreClusterDatastoreEndpointEntry {\n")
     append("\tendpointID : $endpointID\n")
     append("\tnodeID : $nodeID\n")
@@ -54,28 +57,16 @@ class JointFabricDatastoreClusterDatastoreEndpointEntry(
     private const val TAG_FRIENDLY_NAME = 2
     private const val TAG_STATUS_ENTRY = 3
 
-    fun fromTlv(
-      tlvTag: Tag,
-      tlvReader: TlvReader,
-    ): JointFabricDatastoreClusterDatastoreEndpointEntry {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : JointFabricDatastoreClusterDatastoreEndpointEntry {
       tlvReader.enterStructure(tlvTag)
       val endpointID = tlvReader.getUInt(ContextSpecificTag(TAG_ENDPOINT_ID))
       val nodeID = tlvReader.getULong(ContextSpecificTag(TAG_NODE_ID))
       val friendlyName = tlvReader.getString(ContextSpecificTag(TAG_FRIENDLY_NAME))
-      val statusEntry =
-        JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(
-          ContextSpecificTag(TAG_STATUS_ENTRY),
-          tlvReader,
-        )
-
+      val statusEntry = JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(ContextSpecificTag(TAG_STATUS_ENTRY), tlvReader)
+      
       tlvReader.exitContainer()
 
-      return JointFabricDatastoreClusterDatastoreEndpointEntry(
-        endpointID,
-        nodeID,
-        friendlyName,
-        statusEntry,
-      )
+      return JointFabricDatastoreClusterDatastoreEndpointEntry(endpointID, nodeID, friendlyName, statusEntry)
     }
   }
 }

@@ -17,21 +17,24 @@
 package chip.devicecontroller.cluster.structs
 
 import chip.devicecontroller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class JointFabricDatastoreClusterDatastoreGroupInformationEntry(
-  val groupID: ULong,
-  val friendlyName: String,
-  val groupKeySetID: UInt,
-  val groupCAT: UInt,
-  val groupCATVersion: UInt,
-  val groupPermission: UInt,
-  val fabricIndex: UInt,
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class JointFabricDatastoreClusterDatastoreGroupInformationEntry (
+    val groupID: ULong,
+    val friendlyName: String,
+    val groupKeySetID: UInt,
+    val groupCAT: UInt,
+    val groupCATVersion: UInt,
+    val groupPermission: UInt,
+    val fabricIndex: UInt) {
+  override fun toString(): String  = buildString {
     append("JointFabricDatastoreClusterDatastoreGroupInformationEntry {\n")
     append("\tgroupID : $groupID\n")
     append("\tfriendlyName : $friendlyName\n")
@@ -66,10 +69,7 @@ class JointFabricDatastoreClusterDatastoreGroupInformationEntry(
     private const val TAG_GROUP_PERMISSION = 5
     private const val TAG_FABRIC_INDEX = 254
 
-    fun fromTlv(
-      tlvTag: Tag,
-      tlvReader: TlvReader,
-    ): JointFabricDatastoreClusterDatastoreGroupInformationEntry {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : JointFabricDatastoreClusterDatastoreGroupInformationEntry {
       tlvReader.enterStructure(tlvTag)
       val groupID = tlvReader.getULong(ContextSpecificTag(TAG_GROUP_ID))
       val friendlyName = tlvReader.getString(ContextSpecificTag(TAG_FRIENDLY_NAME))
@@ -78,18 +78,10 @@ class JointFabricDatastoreClusterDatastoreGroupInformationEntry(
       val groupCATVersion = tlvReader.getUInt(ContextSpecificTag(TAG_GROUP_CAT_VERSION))
       val groupPermission = tlvReader.getUInt(ContextSpecificTag(TAG_GROUP_PERMISSION))
       val fabricIndex = tlvReader.getUInt(ContextSpecificTag(TAG_FABRIC_INDEX))
-
+      
       tlvReader.exitContainer()
 
-      return JointFabricDatastoreClusterDatastoreGroupInformationEntry(
-        groupID,
-        friendlyName,
-        groupKeySetID,
-        groupCAT,
-        groupCATVersion,
-        groupPermission,
-        fabricIndex,
-      )
+      return JointFabricDatastoreClusterDatastoreGroupInformationEntry(groupID, friendlyName, groupKeySetID, groupCAT, groupCATVersion, groupPermission, fabricIndex)
     }
   }
 }

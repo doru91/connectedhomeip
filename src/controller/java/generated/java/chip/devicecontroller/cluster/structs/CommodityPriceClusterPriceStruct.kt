@@ -17,16 +17,19 @@
 package chip.devicecontroller.cluster.structs
 
 import chip.devicecontroller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class CommodityPriceClusterPriceStruct(
-  val amount: Long,
-  val currency: CommodityPriceClusterCurrencyStruct,
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class CommodityPriceClusterPriceStruct (
+    val amount: Long,
+    val currency: CommodityPriceClusterCurrencyStruct) {
+  override fun toString(): String  = buildString {
     append("CommodityPriceClusterPriceStruct {\n")
     append("\tamount : $amount\n")
     append("\tcurrency : $currency\n")
@@ -46,12 +49,11 @@ class CommodityPriceClusterPriceStruct(
     private const val TAG_AMOUNT = 0
     private const val TAG_CURRENCY = 1
 
-    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): CommodityPriceClusterPriceStruct {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : CommodityPriceClusterPriceStruct {
       tlvReader.enterStructure(tlvTag)
       val amount = tlvReader.getLong(ContextSpecificTag(TAG_AMOUNT))
-      val currency =
-        CommodityPriceClusterCurrencyStruct.fromTlv(ContextSpecificTag(TAG_CURRENCY), tlvReader)
-
+      val currency = CommodityPriceClusterCurrencyStruct.fromTlv(ContextSpecificTag(TAG_CURRENCY), tlvReader)
+      
       tlvReader.exitContainer()
 
       return CommodityPriceClusterPriceStruct(amount, currency)

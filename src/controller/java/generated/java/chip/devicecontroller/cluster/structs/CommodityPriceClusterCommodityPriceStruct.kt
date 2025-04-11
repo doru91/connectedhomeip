@@ -17,21 +17,22 @@
 package chip.devicecontroller.cluster.structs
 
 import chip.devicecontroller.cluster.*
-import java.util.Optional
 import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class CommodityPriceClusterCommodityPriceStruct(
-  val periodStart: ULong,
-  val periodEnd: ULong?,
-  val price: CommodityPriceClusterPriceStruct,
-  val description: Optional<String>,
-  val components: Optional<List<CommodityPriceClusterCommodityPriceComponentStruct>>,
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class CommodityPriceClusterCommodityPriceStruct (
+    val periodStart: ULong,
+    val periodEnd: ULong?,
+    val price: CommodityPriceClusterPriceStruct,
+    val description: Optional<String>,
+    val components: Optional<List<CommodityPriceClusterCommodityPriceComponentStruct>>) {
+  override fun toString(): String  = buildString {
     append("CommodityPriceClusterCommodityPriceStruct {\n")
     append("\tperiodStart : $periodStart\n")
     append("\tperiodEnd : $periodEnd\n")
@@ -46,23 +47,23 @@ class CommodityPriceClusterCommodityPriceStruct(
       startStructure(tlvTag)
       put(ContextSpecificTag(TAG_PERIOD_START), periodStart)
       if (periodEnd != null) {
-        put(ContextSpecificTag(TAG_PERIOD_END), periodEnd)
-      } else {
-        putNull(ContextSpecificTag(TAG_PERIOD_END))
-      }
+      put(ContextSpecificTag(TAG_PERIOD_END), periodEnd)
+    } else {
+      putNull(ContextSpecificTag(TAG_PERIOD_END))
+    }
       price.toTlv(ContextSpecificTag(TAG_PRICE), this)
       if (description.isPresent) {
-        val optdescription = description.get()
-        put(ContextSpecificTag(TAG_DESCRIPTION), optdescription)
-      }
+      val optdescription = description.get()
+      put(ContextSpecificTag(TAG_DESCRIPTION), optdescription)
+    }
       if (components.isPresent) {
-        val optcomponents = components.get()
-        startArray(ContextSpecificTag(TAG_COMPONENTS))
-        for (item in optcomponents.iterator()) {
-          item.toTlv(AnonymousTag, this)
-        }
-        endArray()
+      val optcomponents = components.get()
+      startArray(ContextSpecificTag(TAG_COMPONENTS))
+      for (item in optcomponents.iterator()) {
+        item.toTlv(AnonymousTag, this)
       }
+      endArray()
+    }
       endStructure()
     }
   }
@@ -74,52 +75,36 @@ class CommodityPriceClusterCommodityPriceStruct(
     private const val TAG_DESCRIPTION = 3
     private const val TAG_COMPONENTS = 4
 
-    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): CommodityPriceClusterCommodityPriceStruct {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : CommodityPriceClusterCommodityPriceStruct {
       tlvReader.enterStructure(tlvTag)
       val periodStart = tlvReader.getULong(ContextSpecificTag(TAG_PERIOD_START))
-      val periodEnd =
-        if (!tlvReader.isNull()) {
-          tlvReader.getULong(ContextSpecificTag(TAG_PERIOD_END))
-        } else {
-          tlvReader.getNull(ContextSpecificTag(TAG_PERIOD_END))
-          null
-        }
+      val periodEnd = if (!tlvReader.isNull()) {
+      tlvReader.getULong(ContextSpecificTag(TAG_PERIOD_END))
+    } else {
+      tlvReader.getNull(ContextSpecificTag(TAG_PERIOD_END))
+      null
+    }
       val price = CommodityPriceClusterPriceStruct.fromTlv(ContextSpecificTag(TAG_PRICE), tlvReader)
-      val description =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_DESCRIPTION))) {
-          Optional.of(tlvReader.getString(ContextSpecificTag(TAG_DESCRIPTION)))
-        } else {
-          Optional.empty()
-        }
-      val components =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_COMPONENTS))) {
-          Optional.of(
-            buildList<CommodityPriceClusterCommodityPriceComponentStruct> {
-              tlvReader.enterArray(ContextSpecificTag(TAG_COMPONENTS))
-              while (!tlvReader.isEndOfContainer()) {
-                add(
-                  CommodityPriceClusterCommodityPriceComponentStruct.fromTlv(
-                    AnonymousTag,
-                    tlvReader,
-                  )
-                )
-              }
-              tlvReader.exitContainer()
-            }
-          )
-        } else {
-          Optional.empty()
-        }
-
+      val description = if (tlvReader.isNextTag(ContextSpecificTag(TAG_DESCRIPTION))) {
+      Optional.of(tlvReader.getString(ContextSpecificTag(TAG_DESCRIPTION)))
+    } else {
+      Optional.empty()
+    }
+      val components = if (tlvReader.isNextTag(ContextSpecificTag(TAG_COMPONENTS))) {
+      Optional.of(buildList<CommodityPriceClusterCommodityPriceComponentStruct> {
+      tlvReader.enterArray(ContextSpecificTag(TAG_COMPONENTS))
+      while(!tlvReader.isEndOfContainer()) {
+        add(CommodityPriceClusterCommodityPriceComponentStruct.fromTlv(AnonymousTag, tlvReader))
+      }
+      tlvReader.exitContainer()
+    })
+    } else {
+      Optional.empty()
+    }
+      
       tlvReader.exitContainer()
 
-      return CommodityPriceClusterCommodityPriceStruct(
-        periodStart,
-        periodEnd,
-        price,
-        description,
-        components,
-      )
+      return CommodityPriceClusterCommodityPriceStruct(periodStart, periodEnd, price, description, components)
     }
   }
 }

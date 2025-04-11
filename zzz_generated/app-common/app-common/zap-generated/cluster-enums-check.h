@@ -4174,17 +4174,6 @@ static auto __attribute__((unused)) EnsureKnownEnumValue(JointFabricDatastore::D
         return EnumType::kUnknownEnumValue;
     }
 }
-static auto __attribute__((unused)) EnsureKnownEnumValue(JointFabricDatastore::FailureCodeEnum val)
-{
-    using EnumType = JointFabricDatastore::FailureCodeEnum;
-    switch (val)
-    {
-    case EnumType::kOk:
-        return val;
-    default:
-        return EnumType::kUnknownEnumValue;
-    }
-}
 static auto __attribute__((unused)) EnsureKnownEnumValue(JointFabricDatastore::GroupKeySecurityPolicyEnum val)
 {
     using EnumType = JointFabricDatastore::GroupKeySecurityPolicyEnum;

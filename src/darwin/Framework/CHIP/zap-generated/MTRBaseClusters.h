@@ -21929,10 +21929,6 @@ typedef NS_ENUM(uint8_t, MTRJointFabricDatastoreDatastoreState) {
     MTRJointFabricDatastoreDatastoreStateCommitFailed MTR_PROVISIONALLY_AVAILABLE = 0x03,
 } MTR_PROVISIONALLY_AVAILABLE;
 
-typedef NS_ENUM(uint8_t, MTRJointFabricDatastoreFailureCode) {
-    MTRJointFabricDatastoreFailureCodeOK MTR_PROVISIONALLY_AVAILABLE = 0x00,
-} MTR_PROVISIONALLY_AVAILABLE;
-
 typedef NS_ENUM(uint8_t, MTRJointFabricDatastoreGroupKeySecurityPolicy) {
     MTRJointFabricDatastoreGroupKeySecurityPolicyTrustFirst MTR_PROVISIONALLY_AVAILABLE = 0x00,
     MTRJointFabricDatastoreGroupKeySecurityPolicyCacheAndSync MTR_PROVISIONALLY_AVAILABLE = 0x01,

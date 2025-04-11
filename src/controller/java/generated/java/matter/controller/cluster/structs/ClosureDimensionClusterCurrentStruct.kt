@@ -18,6 +18,7 @@ package matter.controller.cluster.structs
 
 import java.util.Optional
 import matter.controller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
 import matter.tlv.TlvReader
@@ -26,7 +27,7 @@ import matter.tlv.TlvWriter
 class ClosureDimensionClusterCurrentStruct(
   val position: Optional<UShort>,
   val latching: Optional<UByte>,
-  val speed: Optional<UByte>,
+  val speed: Optional<UByte>
 ) {
   override fun toString(): String = buildString {
     append("ClosureDimensionClusterCurrentStruct {\n")
@@ -62,25 +63,22 @@ class ClosureDimensionClusterCurrentStruct(
 
     fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): ClosureDimensionClusterCurrentStruct {
       tlvReader.enterStructure(tlvTag)
-      val position =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_POSITION))) {
-          Optional.of(tlvReader.getUShort(ContextSpecificTag(TAG_POSITION)))
-        } else {
-          Optional.empty()
-        }
-      val latching =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_LATCHING))) {
-          Optional.of(tlvReader.getUByte(ContextSpecificTag(TAG_LATCHING)))
-        } else {
-          Optional.empty()
-        }
-      val speed =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_SPEED))) {
-          Optional.of(tlvReader.getUByte(ContextSpecificTag(TAG_SPEED)))
-        } else {
-          Optional.empty()
-        }
-
+      val position = if (tlvReader.isNextTag(ContextSpecificTag(TAG_POSITION))) {
+      Optional.of(tlvReader.getUShort(ContextSpecificTag(TAG_POSITION)))
+    } else {
+      Optional.empty()
+    }
+      val latching = if (tlvReader.isNextTag(ContextSpecificTag(TAG_LATCHING))) {
+      Optional.of(tlvReader.getUByte(ContextSpecificTag(TAG_LATCHING)))
+    } else {
+      Optional.empty()
+    }
+      val speed = if (tlvReader.isNextTag(ContextSpecificTag(TAG_SPEED))) {
+      Optional.of(tlvReader.getUByte(ContextSpecificTag(TAG_SPEED)))
+    } else {
+      Optional.empty()
+    }
+      
       tlvReader.exitContainer()
 
       return ClosureDimensionClusterCurrentStruct(position, latching, speed)

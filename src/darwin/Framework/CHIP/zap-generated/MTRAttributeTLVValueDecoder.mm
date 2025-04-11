@@ -19726,7 +19726,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.commissioningStatusEntry.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.commissioningStatusEntry.updateTimestamp.Value()];
                 }
-                newElement_0.commissioningStatusEntry.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.commissioningStatusEntry.failureCode)];
+                newElement_0.commissioningStatusEntry.failureCode = [NSNumber numberWithUnsignedChar:entry_0.commissioningStatusEntry.failureCode];
                 newElement_0.fabricIndex = [NSNumber numberWithUnsignedChar:entry_0.fabricIndex];
                 [array_0 addObject:newElement_0];
             }
@@ -19795,7 +19795,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.updateTimestamp.Value()];
                 }
-                newElement_0.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.failureCode)];
+                newElement_0.failureCode = [NSNumber numberWithUnsignedChar:entry_0.failureCode];
                 [array_0 addObject:newElement_0];
             }
             CHIP_ERROR err = iter_0.GetStatus();
@@ -19832,7 +19832,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.statusEntry.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.statusEntry.updateTimestamp.Value()];
                 }
-                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.statusEntry.failureCode)];
+                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:entry_0.statusEntry.failureCode];
                 [array_0 addObject:newElement_0];
             }
             CHIP_ERROR err = iter_0.GetStatus();
@@ -19890,7 +19890,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.statusEntry.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.statusEntry.updateTimestamp.Value()];
                 }
-                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.statusEntry.failureCode)];
+                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:entry_0.statusEntry.failureCode];
                 [array_0 addObject:newElement_0];
             }
             CHIP_ERROR err = iter_0.GetStatus();
@@ -19926,7 +19926,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.statusEntry.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.statusEntry.updateTimestamp.Value()];
                 }
-                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.statusEntry.failureCode)];
+                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:entry_0.statusEntry.failureCode];
                 [array_0 addObject:newElement_0];
             }
             CHIP_ERROR err = iter_0.GetStatus();
@@ -20020,7 +20020,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.statusEntry.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.statusEntry.updateTimestamp.Value()];
                 }
-                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.statusEntry.failureCode)];
+                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:entry_0.statusEntry.failureCode];
                 [array_0 addObject:newElement_0];
             }
             CHIP_ERROR err = iter_0.GetStatus();
@@ -20062,7 +20062,7 @@ static id _Nullable DecodeAttributeValueForJointFabricDatastoreCluster(Attribute
                 } else {
                     newElement_0.statusEntry.updateTimestamp = [NSNumber numberWithUnsignedLongLong:entry_0.statusEntry.updateTimestamp.Value()];
                 }
-                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:chip::to_underlying(entry_0.statusEntry.failureCode)];
+                newElement_0.statusEntry.failureCode = [NSNumber numberWithUnsignedChar:entry_0.statusEntry.failureCode];
                 [array_0 addObject:newElement_0];
             }
             CHIP_ERROR err = iter_0.GetStatus();

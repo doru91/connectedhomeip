@@ -25,11 +25,6 @@ limitations under the License.
     <item name="CommitFailed" value="0x03"/>
   </enum>
 
-  <enum name="FailureCodeEnum" type="enum8">
-    <cluster code="0x0752"/>
-    <item name="OK" value="0x00"/>
-  </enum>
-
   <enum name="AccessControlEntryPrivilegeEnum" type="enum8">
     <cluster code="0x0752"/>
     <item name="View" value="0x01"/>
@@ -91,7 +86,7 @@ limitations under the License.
     <cluster code="0x0752"/>
     <item fieldId="0" name="State" type="DatastoreStateEnum" default="Pending"/>
     <item fieldId="1" name="UpdateTimestamp" type="epoch_us" isNullable="true"/>
-    <item fieldId="2" name="FailureCode" type="FailureCodeEnum" default="OK"/>
+    <item fieldId="2" name="FailureCode" type="status" />
   </struct>
 
   <struct name="DatastoreNodeKeyEntry">

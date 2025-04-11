@@ -47035,7 +47035,7 @@ struct Type
 public:
     DatastoreStateEnum state = static_cast<DatastoreStateEnum>(0);
     DataModel::Nullable<uint64_t> updateTimestamp;
-    FailureCodeEnum failureCode = static_cast<FailureCodeEnum>(0);
+    uint8_t failureCode = static_cast<uint8_t>(0);
 
     CHIP_ERROR Decode(TLV::TLVReader & reader);
 

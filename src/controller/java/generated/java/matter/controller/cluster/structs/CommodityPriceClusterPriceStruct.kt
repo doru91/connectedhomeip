@@ -16,7 +16,9 @@
  */
 package matter.controller.cluster.structs
 
+import java.util.Optional
 import matter.controller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
 import matter.tlv.TlvReader
@@ -24,7 +26,7 @@ import matter.tlv.TlvWriter
 
 class CommodityPriceClusterPriceStruct(
   val amount: Long,
-  val currency: CommodityPriceClusterCurrencyStruct,
+  val currency: CommodityPriceClusterCurrencyStruct
 ) {
   override fun toString(): String = buildString {
     append("CommodityPriceClusterPriceStruct {\n")
@@ -49,9 +51,8 @@ class CommodityPriceClusterPriceStruct(
     fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): CommodityPriceClusterPriceStruct {
       tlvReader.enterStructure(tlvTag)
       val amount = tlvReader.getLong(ContextSpecificTag(TAG_AMOUNT))
-      val currency =
-        CommodityPriceClusterCurrencyStruct.fromTlv(ContextSpecificTag(TAG_CURRENCY), tlvReader)
-
+      val currency = CommodityPriceClusterCurrencyStruct.fromTlv(ContextSpecificTag(TAG_CURRENCY), tlvReader)
+      
       tlvReader.exitContainer()
 
       return CommodityPriceClusterPriceStruct(amount, currency)

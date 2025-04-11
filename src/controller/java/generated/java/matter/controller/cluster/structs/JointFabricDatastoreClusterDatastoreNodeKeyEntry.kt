@@ -16,7 +16,9 @@
  */
 package matter.controller.cluster.structs
 
+import java.util.Optional
 import matter.controller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
 import matter.tlv.TlvReader
@@ -25,7 +27,7 @@ import matter.tlv.TlvWriter
 class JointFabricDatastoreClusterDatastoreNodeKeyEntry(
   val nodeID: ULong,
   val groupKeySetId: UShort,
-  val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry,
+  val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry
 ) {
   override fun toString(): String = buildString {
     append("JointFabricDatastoreClusterDatastoreNodeKeyEntry {\n")
@@ -50,19 +52,12 @@ class JointFabricDatastoreClusterDatastoreNodeKeyEntry(
     private const val TAG_GROUP_KEY_SET_ID = 1
     private const val TAG_STATUS_ENTRY = 2
 
-    fun fromTlv(
-      tlvTag: Tag,
-      tlvReader: TlvReader,
-    ): JointFabricDatastoreClusterDatastoreNodeKeyEntry {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): JointFabricDatastoreClusterDatastoreNodeKeyEntry {
       tlvReader.enterStructure(tlvTag)
       val nodeID = tlvReader.getULong(ContextSpecificTag(TAG_NODE_ID))
       val groupKeySetId = tlvReader.getUShort(ContextSpecificTag(TAG_GROUP_KEY_SET_ID))
-      val statusEntry =
-        JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(
-          ContextSpecificTag(TAG_STATUS_ENTRY),
-          tlvReader,
-        )
-
+      val statusEntry = JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(ContextSpecificTag(TAG_STATUS_ENTRY), tlvReader)
+      
       tlvReader.exitContainer()
 
       return JointFabricDatastoreClusterDatastoreNodeKeyEntry(nodeID, groupKeySetId, statusEntry)

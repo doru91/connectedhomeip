@@ -20,14 +20,15 @@ import chip.devicecontroller.cluster.*
 import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
+import matter.tlv.TlvParsingException
 import matter.tlv.TlvReader
 import matter.tlv.TlvWriter
 
-class CommodityPriceClusterForecastChangeEvent(
-  val priceForecast:
-    List<chip.devicecontroller.cluster.structs.CommodityPriceClusterCommodityPriceStruct>
-) {
-  override fun toString(): String = buildString {
+import java.util.Optional
+
+class CommodityPriceClusterForecastChangeEvent (
+    val priceForecast: List<chip.devicecontroller.cluster.structs.CommodityPriceClusterCommodityPriceStruct>) {
+  override fun toString(): String  = buildString {
     append("CommodityPriceClusterForecastChangeEvent {\n")
     append("\tpriceForecast : $priceForecast\n")
     append("}\n")
@@ -48,20 +49,16 @@ class CommodityPriceClusterForecastChangeEvent(
   companion object {
     private const val TAG_PRICE_FORECAST = 0
 
-    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): CommodityPriceClusterForecastChangeEvent {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader) : CommodityPriceClusterForecastChangeEvent {
       tlvReader.enterStructure(tlvTag)
-      val priceForecast =
-        buildList<chip.devicecontroller.cluster.structs.CommodityPriceClusterCommodityPriceStruct> {
-          tlvReader.enterArray(ContextSpecificTag(TAG_PRICE_FORECAST))
-          while (!tlvReader.isEndOfContainer()) {
-            this.add(
-              chip.devicecontroller.cluster.structs.CommodityPriceClusterCommodityPriceStruct
-                .fromTlv(AnonymousTag, tlvReader)
-            )
-          }
-          tlvReader.exitContainer()
-        }
-
+      val priceForecast = buildList <chip.devicecontroller.cluster.structs.CommodityPriceClusterCommodityPriceStruct> {
+      tlvReader.enterArray(ContextSpecificTag(TAG_PRICE_FORECAST))
+      while(!tlvReader.isEndOfContainer()) {
+        this.add(chip.devicecontroller.cluster.structs.CommodityPriceClusterCommodityPriceStruct.fromTlv(AnonymousTag, tlvReader))
+      }
+      tlvReader.exitContainer()
+    }
+      
       tlvReader.exitContainer()
 
       return CommodityPriceClusterForecastChangeEvent(priceForecast)

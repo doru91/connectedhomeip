@@ -16,7 +16,9 @@
  */
 package matter.controller.cluster.structs
 
+import java.util.Optional
 import matter.controller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
 import matter.tlv.TlvReader
@@ -27,7 +29,7 @@ class JointFabricDatastoreClusterDatastoreEndpointBindingEntry(
   val endpointID: UShort,
   val listID: UShort,
   val binding: JointFabricDatastoreClusterTargetStruct,
-  val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry,
+  val statusEntry: JointFabricDatastoreClusterDatastoreStatusEntry
 ) {
   override fun toString(): String = buildString {
     append("JointFabricDatastoreClusterDatastoreEndpointBindingEntry {\n")
@@ -58,31 +60,17 @@ class JointFabricDatastoreClusterDatastoreEndpointBindingEntry(
     private const val TAG_BINDING = 3
     private const val TAG_STATUS_ENTRY = 4
 
-    fun fromTlv(
-      tlvTag: Tag,
-      tlvReader: TlvReader,
-    ): JointFabricDatastoreClusterDatastoreEndpointBindingEntry {
+    fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): JointFabricDatastoreClusterDatastoreEndpointBindingEntry {
       tlvReader.enterStructure(tlvTag)
       val nodeID = tlvReader.getULong(ContextSpecificTag(TAG_NODE_ID))
       val endpointID = tlvReader.getUShort(ContextSpecificTag(TAG_ENDPOINT_ID))
       val listID = tlvReader.getUShort(ContextSpecificTag(TAG_LIST_ID))
-      val binding =
-        JointFabricDatastoreClusterTargetStruct.fromTlv(ContextSpecificTag(TAG_BINDING), tlvReader)
-      val statusEntry =
-        JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(
-          ContextSpecificTag(TAG_STATUS_ENTRY),
-          tlvReader,
-        )
-
+      val binding = JointFabricDatastoreClusterTargetStruct.fromTlv(ContextSpecificTag(TAG_BINDING), tlvReader)
+      val statusEntry = JointFabricDatastoreClusterDatastoreStatusEntry.fromTlv(ContextSpecificTag(TAG_STATUS_ENTRY), tlvReader)
+      
       tlvReader.exitContainer()
 
-      return JointFabricDatastoreClusterDatastoreEndpointBindingEntry(
-        nodeID,
-        endpointID,
-        listID,
-        binding,
-        statusEntry,
-      )
+      return JointFabricDatastoreClusterDatastoreEndpointBindingEntry(nodeID, endpointID, listID, binding, statusEntry)
     }
   }
 }

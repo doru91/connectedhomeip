@@ -6220,17 +6220,6 @@ enum class DatastoreStateEnum : uint8_t
     kUnknownEnumValue = 4,
 };
 
-// Enum for FailureCodeEnum
-enum class FailureCodeEnum : uint8_t
-{
-    kOk = 0x00,
-    // All received enum values that are not listed above will be mapped
-    // to kUnknownEnumValue. This is a helper enum value that should only
-    // be used by code to process how it handles receiving and unknown
-    // enum value. This specific should never be transmitted.
-    kUnknownEnumValue = 1,
-};
-
 // Enum for GroupKeySecurityPolicyEnum
 enum class GroupKeySecurityPolicyEnum : uint8_t
 {

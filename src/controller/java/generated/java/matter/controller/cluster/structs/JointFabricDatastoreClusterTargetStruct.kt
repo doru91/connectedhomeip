@@ -18,6 +18,7 @@ package matter.controller.cluster.structs
 
 import java.util.Optional
 import matter.controller.cluster.*
+import matter.tlv.AnonymousTag
 import matter.tlv.ContextSpecificTag
 import matter.tlv.Tag
 import matter.tlv.TlvReader
@@ -27,7 +28,7 @@ class JointFabricDatastoreClusterTargetStruct(
   val node: Optional<ULong>,
   val group: Optional<UShort>,
   val endpoint: Optional<UShort>,
-  val cluster: Optional<UInt>,
+  val cluster: Optional<UInt>
 ) {
   override fun toString(): String = buildString {
     append("JointFabricDatastoreClusterTargetStruct {\n")
@@ -69,31 +70,27 @@ class JointFabricDatastoreClusterTargetStruct(
 
     fun fromTlv(tlvTag: Tag, tlvReader: TlvReader): JointFabricDatastoreClusterTargetStruct {
       tlvReader.enterStructure(tlvTag)
-      val node =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_NODE))) {
-          Optional.of(tlvReader.getULong(ContextSpecificTag(TAG_NODE)))
-        } else {
-          Optional.empty()
-        }
-      val group =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_GROUP))) {
-          Optional.of(tlvReader.getUShort(ContextSpecificTag(TAG_GROUP)))
-        } else {
-          Optional.empty()
-        }
-      val endpoint =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_ENDPOINT))) {
-          Optional.of(tlvReader.getUShort(ContextSpecificTag(TAG_ENDPOINT)))
-        } else {
-          Optional.empty()
-        }
-      val cluster =
-        if (tlvReader.isNextTag(ContextSpecificTag(TAG_CLUSTER))) {
-          Optional.of(tlvReader.getUInt(ContextSpecificTag(TAG_CLUSTER)))
-        } else {
-          Optional.empty()
-        }
-
+      val node = if (tlvReader.isNextTag(ContextSpecificTag(TAG_NODE))) {
+      Optional.of(tlvReader.getULong(ContextSpecificTag(TAG_NODE)))
+    } else {
+      Optional.empty()
+    }
+      val group = if (tlvReader.isNextTag(ContextSpecificTag(TAG_GROUP))) {
+      Optional.of(tlvReader.getUShort(ContextSpecificTag(TAG_GROUP)))
+    } else {
+      Optional.empty()
+    }
+      val endpoint = if (tlvReader.isNextTag(ContextSpecificTag(TAG_ENDPOINT))) {
+      Optional.of(tlvReader.getUShort(ContextSpecificTag(TAG_ENDPOINT)))
+    } else {
+      Optional.empty()
+    }
+      val cluster = if (tlvReader.isNextTag(ContextSpecificTag(TAG_CLUSTER))) {
+      Optional.of(tlvReader.getUInt(ContextSpecificTag(TAG_CLUSTER)))
+    } else {
+      Optional.empty()
+    }
+      
       tlvReader.exitContainer()
 
       return JointFabricDatastoreClusterTargetStruct(node, group, endpoint, cluster)
