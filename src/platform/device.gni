@@ -126,6 +126,11 @@ declare_args() {
 }
 
 declare_args() {
+  # Enable Joint Fabric features in commissioner code
+  chip_device_config_enable_joint_fabric = false
+}
+
+declare_args() {
   # Enable subscription resumption after timeout - separate configuration for power use measurement
   chip_subscription_timeout_resumption = chip_persist_subscriptions
 }

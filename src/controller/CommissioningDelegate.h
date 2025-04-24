@@ -30,6 +30,10 @@
 #include <matter/tracing/build_config.h>
 #include <system/SystemClock.h>
 
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+ #include <controller/JCMCommissioner.h>
+#endif // CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+
 namespace chip {
 namespace Controller {
 
@@ -51,6 +55,9 @@ enum CommissioningStage : uint8_t
     kSendAttestationRequest,     ///< Send AttestationRequest (0x3E:0) command to the device
     kAttestationVerification,    ///< Verify AttestationResponse (0x3E:1) validity
     kAttestationRevocationCheck, ///< Verify Revocation Status of device's DAC chain
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    kJCMTrustVerification,      ///< Verify trust towards Ecosystem Administrator
+ #endif // CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
     kSendOpCertSigningRequest,   ///< Send CSRRequest (0x3E:4) command to the device
     kValidateCSR,                ///< Verify CSRResponse (0x3E:5) validity
     kGenerateNOCChain,           ///< TLV encode Node Operational Credentials (NOC) chain certs
@@ -606,6 +613,17 @@ public:
         return *this;
     }
 
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    // Execute Joint Commissioning Method
+    Optional<bool> GetExecuteJCM() const { return mExecuteJCM; }
+#endif
+
+    CommissioningParameters & SetExecuteJCM(bool executeJCM)
+    {
+        mExecuteJCM = MakeOptional(executeJCM);
+        return *this;
+    }
+
     // Clear all members that depend on some sort of external buffer.  Can be
     // used to make sure that we are not holding any dangling pointers.
     void ClearExternalBufferDependentValues()
@@ -679,6 +697,10 @@ private:
     ICDRegistrationStrategy mICDRegistrationStrategy = ICDRegistrationStrategy::kIgnore;
     bool mCheckForMatchingFabric                     = false;
     Span<const app::AttributePathParams> mExtraReadPaths;
+
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    Optional<bool> mExecuteJCM;
+#endif
 };
 
 struct RequestedCertificate
@@ -856,7 +878,11 @@ public:
      */
     struct CommissioningReport
         : Variant<RequestedCertificate, AttestationResponse, CSRResponse, NocChain, OperationalNodeFoundData, ReadCommissioningInfo,
-                  AttestationErrorInfo, CommissioningErrorInfo, NetworkCommissioningStatusInfo, TimeZoneResponseInfo>
+                  AttestationErrorInfo, CommissioningErrorInfo, NetworkCommissioningStatusInfo, TimeZoneResponseInfo
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+                  ,JCMCommissionerError
+ #endif // CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+				  >
     {
         CommissioningReport() : stageCompleted(CommissioningStage::kError) {}
         CommissioningStage stageCompleted;

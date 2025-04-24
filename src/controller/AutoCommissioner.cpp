@@ -386,7 +386,15 @@ CommissioningStage AutoCommissioner::GetNextCommissioningStageInternal(Commissio
     case CommissioningStage::kAttestationVerification:
         return CommissioningStage::kAttestationRevocationCheck;
     case CommissioningStage::kAttestationRevocationCheck:
-        return CommissioningStage::kSendOpCertSigningRequest;
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+         if (mParams.GetExecuteJCM().ValueOr(false)) {
+             return CommissioningStage::kJCMTrustVerification;
+         }
+ #endif // CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+         return CommissioningStage::kSendOpCertSigningRequest;
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+     case CommissioningStage::kJCMTrustVerification:
+#endif
     case CommissioningStage::kSendOpCertSigningRequest:
         return CommissioningStage::kValidateCSR;
     case CommissioningStage::kValidateCSR:
