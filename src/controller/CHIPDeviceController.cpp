@@ -2338,6 +2338,19 @@ void DeviceCommissioner::ContinueReadingCommissioningInfo(const CommissioningPar
         VerifyOrReturn(builder.AddAttributePath(kRootEndpointId, Clusters::IcdManagement::Id,
                                                 Clusters::IcdManagement::Attributes::ActiveModeThreshold::Id));
 
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+        if (params.GetExecuteJCM().ValueOr(false)) {
+            VerifyOrReturn(builder.AddAttributePath(Clusters::JointFabricAdministrator::Id,
+                                                    Clusters::JointFabricAdministrator::Attributes::AdministratorFabricIndex::Id));
+            VerifyOrReturn(builder.AddAttributePath(kRootEndpointId, Clusters::OperationalCredentials::Id,
+                                                    Clusters::OperationalCredentials::Attributes::Fabrics::Id));
+            VerifyOrReturn(builder.AddAttributePath(kRootEndpointId, Clusters::OperationalCredentials::Id,
+                                                    Clusters::OperationalCredentials::Attributes::NOCs::Id));
+            VerifyOrReturn(builder.AddAttributePath(kRootEndpointId, Clusters::OperationalCredentials::Id,
+                                                    Clusters::OperationalCredentials::Attributes::TrustedRootCertificates::Id));
+        }
+#endif
+
         // Extra paths requested via CommissioningParameters
         for (auto const & path : params.GetExtraReadPaths())
         {
@@ -2384,6 +2397,9 @@ void DeviceCommissioner::FinishReadingCommissioningInfo()
     AccumulateErrors(err, ParseTimeSyncInfo(info));
     AccumulateErrors(err, ParseFabrics(info));
     AccumulateErrors(err, ParseICDInfo(info));
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    AccumulateErrors(err, ParseJFAdministratorInfo(info));
+#endif
 
     if (mPairingDelegate != nullptr && err == CHIP_NO_ERROR)
     {
@@ -2776,6 +2792,97 @@ CHIP_ERROR DeviceCommissioner::ParseICDInfo(ReadCommissioningInfo & info)
 
     return err;
 }
+
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+CHIP_ERROR DeviceCommissioner::ParseJFAdministratorInfo(ReadCommissioningInfo & info)
+{
+    using namespace JointFabricAdministrator::Attributes;
+    using namespace OperationalCredentials::Attributes;
+
+    CHIP_ERROR err = CHIP_NO_ERROR;;
+
+    err = mAttributeCache->ForEachAttribute(JointFabricAdministrator::Id, [this, &info](const ConcreteAttributePath & path) {
+        using namespace chip::app::Clusters::JointFabricAdministrator::Attributes;
+        AdministratorFabricIndex::TypeInfo::DecodableType administratorFabricIndex;
+
+        VerifyOrReturnError(path.mAttributeId == AdministratorFabricIndex::Id, CHIP_NO_ERROR);
+        ReturnErrorOnFailure(this->mAttributeCache->Get<AdministratorFabricIndex::TypeInfo>(path, administratorFabricIndex));
+
+        if (!administratorFabricIndex.IsNull())
+        {
+            ChipLogProgress(Controller, "AdministratorFabricIndex: %d", administratorFabricIndex.Value());
+            info.administratorFabricIndex = administratorFabricIndex.Value();
+            info.jfAdminEndpoint = path.mEndpointId;
+        }
+        else
+        {
+            return CHIP_ERROR_INTERNAL;
+        }
+
+        return CHIP_NO_ERROR;
+    });
+
+    if (err != CHIP_NO_ERROR)
+    {
+        return err;
+    }
+
+    err = mAttributeCache->ForEachAttribute(OperationalCredentials::Id, [this, &info](const ConcreteAttributePath & path) {
+        using namespace chip::app::Clusters::OperationalCredentials::Attributes;
+
+        switch (path.mAttributeId)
+        {
+            case Fabrics::Id: {
+                Fabrics::TypeInfo::DecodableType fabrics;
+                ReturnErrorOnFailure(this->mAttributeCache->Get<Fabrics::TypeInfo>(path, fabrics));
+
+                auto iter = fabrics.begin();
+                while (iter.Next())
+                {
+                    auto & fabricDescriptor = iter.GetValue();
+
+                    if (fabricDescriptor.fabricID == info.administratorFabricIndex)
+                    {
+                        chip::ByteSpan rootKeySpan = fabricDescriptor.rootPublicKey;
+                        if (rootKeySpan.size() != Crypto::kP256_PublicKey_Length)
+                        {
+                            ChipLogError(Controller, "DeviceCommissioner::ParseJFAdministratorInfo - fabric root key size mismatch");
+                            return CHIP_ERROR_INTERNAL;
+                        }
+
+                        P256PublicKeySpan rootPubKeySpan(rootKeySpan.data());
+                        P256PublicKey deviceRootPublicKey(rootPubKeySpan);
+
+                        info.jfPeerAdminFabricTable.rootPublicKey = deviceRootPublicKey;
+                        info.jfPeerAdminFabricTable.vendorID = fabricDescriptor.vendorID;
+
+                        if (fabricDescriptor.VIDVerificationStatement.HasValue())
+                        {
+                            ChipLogError(Controller, "Per-home RCAC are not supported by JF for now!");
+                            return CHIP_ERROR_INTERNAL;
+                        }
+
+                        ChipLogProgress(Controller, "JF: Parsed the Fabric Table!");
+                        break;
+                    }
+                }
+                return CHIP_NO_ERROR;
+            }
+            default:
+                return CHIP_NO_ERROR;
+        }
+
+        return CHIP_NO_ERROR;
+    });
+
+    if (err != CHIP_NO_ERROR)
+    {
+        return err;
+    }
+
+    return err;
+}
+#endif
 
 void DeviceCommissioner::OnArmFailSafe(void * context,
                                        const GeneralCommissioning::Commands::ArmFailSafeResponse::DecodableType & data)
@@ -3354,6 +3461,15 @@ void DeviceCommissioner::PerformCommissioningStep(DeviceProxy * proxy, Commissio
         }
     }
     break;
+
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    case CommissioningStage::kSendVIDVerificationRequest: {
+    	/* TODO: send SignVidVerificationRequest */
+        CommissioningStageComplete(CHIP_NO_ERROR);
+        break;
+    }
+#endif   
+
     case CommissioningStage::kSendOpCertSigningRequest: {
         if (!params.GetCSRNonce().HasValue())
         {

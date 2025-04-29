@@ -51,6 +51,9 @@ enum CommissioningStage : uint8_t
     kSendAttestationRequest,     ///< Send AttestationRequest (0x3E:0) command to the device
     kAttestationVerification,    ///< Verify AttestationResponse (0x3E:1) validity
     kAttestationRevocationCheck, ///< Verify Revocation Status of device's DAC chain
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    kSendVIDVerificationRequest, ///< Send SignVIDVerificationRequest command to the device
+#endif // CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
     kSendOpCertSigningRequest,   ///< Send CSRRequest (0x3E:4) command to the device
     kValidateCSR,                ///< Verify CSRResponse (0x3E:5) validity
     kGenerateNOCChain,           ///< TLV encode Node Operational Credentials (NOC) chain certs
@@ -792,6 +795,15 @@ struct ICDManagementClusterInfo
     CharSpan userActiveModeTriggerInstruction;
 };
 
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+struct JFFabricTableInfo
+{
+    Crypto::P256PublicKey rootPublicKey;
+    VendorId vendorID  = VendorId::Common;
+};
+
+#endif
+
 struct ReadCommissioningInfo
 {
 #if CHIP_CONFIG_ENABLE_READ_CLIENT
@@ -809,6 +821,22 @@ struct ReadCommissioningInfo
     NodeId remoteNodeId               = kUndefinedNodeId;
     bool supportsConcurrentConnection = true;
     ICDManagementClusterInfo icd;
+
+#if CHIP_DEVICE_CONFIG_ENABLE_JOINT_FABRIC
+    EndpointId jfAdminEndpoint = kInvalidEndpointId;
+    FabricIndex administratorFabricIndex = kUndefinedFabricIndex;
+
+    JFFabricTableInfo jfPeerAdminFabricTable;
+
+    uint8_t * jfPeerAdminNOC = nullptr;
+    uint16_t jfPeerAdminNOCLen = 0;
+
+    uint8_t * jfPeerAdminICAC = nullptr;
+    uint16_t jfPeerAdminICACLen = 0;
+
+    uint8_t * jfPeerAdminRCAC = nullptr;
+    uint16_t jfPeerAdminRCACLen = 0;
+#endif
 };
 
 struct TimeZoneResponseInfo
