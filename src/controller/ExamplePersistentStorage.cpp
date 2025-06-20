@@ -141,6 +141,9 @@ CHIP_ERROR PersistentStorage::SyncSetKeyValue(const char * key, const void * val
     }
 
     mConfig.sections[kDefaultSectionName] = section;
+
+    ChipLogProgress(chipTool, "\r\n Name: %s", mName);
+
     return CommitConfig(mDirectory, mName);
 }
 

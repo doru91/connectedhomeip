@@ -35,6 +35,9 @@ constexpr char kOperationalCredentialsIntermediateIssuerKeypairStorage[] = "Exam
 constexpr char kOperationalCredentialsRootCertificateStorage[]           = "ExampleCARootCert";
 constexpr char kOperationalCredentialsIntermediateCertificateStorage[]   = "ExampleCAIntermediateCert";
 
+
+constexpr char kTest[]   = "kTest";
+
 using namespace Credentials;
 using namespace Crypto;
 using namespace TLV;
@@ -238,6 +241,21 @@ CHIP_ERROR ExampleOperationalCredentialsIssuer::GenerateNOCChainAfterValidation(
     uint16_t rcacBufLen = static_cast<uint16_t>(std::min(rcac.size(), static_cast<size_t>(UINT16_MAX)));
     PERSISTENT_KEY_OP(mIndex, kOperationalCredentialsRootCertificateStorage, key,
                       err = mStorage->SyncGetKeyValue(key, rcac.data(), rcacBufLen));
+    static int a = 0;
+    a++;
+
+    /* When GenerateNOCChainAfterValidation is called for the second time:
+     *     - mName field of src/controller/ExamplePersistentStorage.cpp should be "alpha"
+     *     - instead, mName contains garbage value which ends up in creating a
+     *     chip_tool_config.8'$'\006''.ini' file in the storage directory
+     */
+    if (a == 2)
+    {
+        PERSISTENT_KEY_OP(mIndex, kTest, key,
+                          ReturnErrorOnFailure(mStorage->SyncSetKeyValue(key, rcac.data(), static_cast<uint16_t>(rcac.size()))));
+    }
+
+
     // Always regenerate RCAC on maximally sized certs. The keys remain the same, so everything is fine.
     if (mUseMaximallySizedCerts)
     {
