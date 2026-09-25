@@ -91,6 +91,7 @@ if(CONFIG_CHIP_APP_JF_ADMIN)
     ${JFA_DIR}/source/JFAPlatform.cpp
     ${JFA_DIR}/source/JFAInit.cpp
     ${JFA_DIR}/source/JFARpcServer.cpp
+    ${JFA_DIR}/source/JFAWildcardSubscription.cpp
   )
   target_include_directories(app PRIVATE
     ${JFA_DIR}/include

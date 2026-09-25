@@ -37,10 +37,14 @@ namespace chip {
 class JFAManager : public app::JointFabricAdministrator::Delegate
 {
 public:
-    JFAManager() : mOnConnectedCallback(OnConnected, this), mOnConnectionFailureCallback(OnConnectionFailure, this) {}
+    JFAManager() :
+        mOnConnectedCallback(OnConnected, this), mOnConnectionFailureCallback(OnConnectionFailure, this),
+        mOnRestoreConnectedCallback(OnRestoreConnected, this), mOnRestoreConnectionFailureCallback(OnRestoreConnectionFailure, this)
+    {}
 
     CHIP_ERROR Init(Server & server);
     void HandleCommissioningCompleteEvent();
+    static void OnRestoreSubscriptionsTimer(chip::System::Layer * layer, void * appState);
     void OnNetworkReady();
     CHIP_ERROR FinalizeCommissioning(NodeId nodeId, bool isJCM, chip::Crypto::P256PublicKey & trustedIcacPublicKeyB,
                                      uint16_t peerAdminJFAdminClusterEndpointId);
@@ -85,6 +89,13 @@ private:
     static void OnConnected(void * context, Messaging::ExchangeManager & exchangeMgr, const SessionHandle & sessionHandle);
     static void OnConnectionFailure(void * context, const ScopedNodeId & peerId, CHIP_ERROR error);
 
+    // Reboot-restore path: establish the CASE session through the JFA
+    // commissioner's own CASESessionManager/ExchangeManager (not the Server's
+    // Interaction Model engine) so that the UDP endpoint used to initiate CASE
+    // is the same one that owns the resulting subscription's ReadClient.
+    static void OnRestoreConnected(void * context, Messaging::ExchangeManager & exchangeMgr, const SessionHandle & sessionHandle);
+    static void OnRestoreConnectionFailure(void * context, const ScopedNodeId & peerId, CHIP_ERROR error);
+
     Server * mServer                          = nullptr;
     CASESessionManager * mCASESessionManager  = nullptr;
     Messaging::ExchangeManager * mExchangeMgr = nullptr;
@@ -92,6 +103,9 @@ private:
     SessionHolder mSessionHolder;
     Callback::Callback<OnDeviceConnected> mOnConnectedCallback;
     Callback::Callback<OnDeviceConnectionFailure> mOnConnectionFailureCallback;
+    Callback::Callback<OnDeviceConnected> mOnRestoreConnectedCallback;
+    Callback::Callback<OnDeviceConnectionFailure> mOnRestoreConnectionFailureCallback;
+
     NodeId mNodeId                               = kUndefinedNodeId;
     OnConnectedAction mOnConnectedAction         = kStandardCommissioningComplete;
     FabricId jfFabricIndex                       = kUndefinedFabricId;
@@ -109,6 +123,9 @@ private:
     uint16_t mLevelControlTransitionTime = 0;
 
     void ConnectToNode(ScopedNodeId scopedNodeId, OnConnectedAction onConnectedAction);
+    // Opens a wildcard subscription to the just-onboarded commissionee over the
+    // active CASE session.
+    void OpenCommissioneeSubscription();
     CHIP_ERROR SendCommissioningComplete();
     CHIP_ERROR AnnounceJointFabricAdministrator();
     CHIP_ERROR SendICACSRRequest();

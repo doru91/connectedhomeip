@@ -93,6 +93,7 @@ CHIP_ERROR JFAInitCommissioner(FabricId fabricId, FabricIndex commissionerFabric
     factoryParams.enableServerInteractions = true;
     // Running alongside the existing Server: do not overwrite its DNS-SD port.
     factoryParams.preventDnssdPortOverwrite = true;
+    factoryParams.sessionResumptionStorage  = Server::GetInstance().GetSessionResumptionStorage();
     factoryParams.dataModelProvider         = chip::app::CodegenDataModelProviderInstance(nullptr);
 
     // Reuse the server's already-initialized GroupDataProvider to avoid a

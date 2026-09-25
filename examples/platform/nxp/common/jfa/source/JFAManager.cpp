@@ -25,16 +25,20 @@
 #include <app/server/Server.h>
 
 #include "JFAPlatform.h"
+#include "JFAWildcardSubscription.h"
 
+#include <app/CASESessionManager.h>
 #include <clusters/BooleanState/Attributes.h>
 #include <clusters/FanControl/Attributes.h>
 #include <clusters/FanControl/Enums.h>
 #include <clusters/LevelControl/Commands.h>
 #include <clusters/OnOff/Commands.h>
 #include <controller/CHIPCluster.h>
+#include <controller/CHIPDeviceController.h>
 #include <controller/ReadInteraction.h>
 #include <controller/WriteInteraction.h>
 #include <lib/support/logging/CHIPLogging.h>
+#include <platform/CHIPDeviceLayer.h>
 
 using namespace chip;
 using namespace chip::app;
@@ -49,8 +53,57 @@ constexpr uint8_t kJFAnchorShift    = 2;
 constexpr uint8_t kJFDatastoreShift = 3;
 
 constexpr chip::EndpointId kJointFabricAdminEndpointId = 1;
+constexpr uint32_t kPostRebootSubscriptionDelaySeconds = 60;
 
 JFAManager JFAManager::sJFA;
+
+void JFAManager::OnRestoreSubscriptionsTimer(chip::System::Layer * /*layer*/, void * appState)
+{
+    JFAManager * self = static_cast<JFAManager *>(appState);
+    auto & datastore  = Server::GetInstance().GetJointFabricDatastore();
+
+    Controller::DeviceCommissioner * commissioner = JFAGetDeviceCommissioner();
+    VerifyOrReturn(commissioner != nullptr,
+                   ChipLogError(JointFabric, "Cannot restore subscriptions: commissioner not initialized"));
+
+    CASESessionManager * caseSessionManager = commissioner->CASESessionMgr();
+    VerifyOrReturn(caseSessionManager != nullptr,
+                   ChipLogError(JointFabric, "Cannot restore subscriptions: commissioner CASESessionManager unavailable"));
+
+    for (const auto & entry : datastore.GetNodeInformationEntries())
+    {
+        ChipLogProgress(JointFabric, "Restoring wildcard subscription for nodeId=0x" ChipLogFormatX64,
+                        ChipLogValueX64(entry.nodeID));
+
+        // FindOrEstablishSession establishes CASE over the commissioner's
+        // endpoint; the subscription is opened from OnRestoreConnected using the
+        // exchange manager handed to that callback.
+        caseSessionManager->FindOrEstablishSession(ScopedNodeId(entry.nodeID, commissioner->GetFabricIndex()),
+                                                   &self->mOnRestoreConnectedCallback, &self->mOnRestoreConnectionFailureCallback);
+    }
+}
+
+void JFAManager::OnRestoreConnected(void * context, Messaging::ExchangeManager & exchangeMgr, const SessionHandle & sessionHandle)
+{
+    (void) context;
+
+    ScopedNodeId peer = sessionHandle->GetPeer();
+    ChipLogProgress(JointFabric, "Restore: CASE established to node=0x" ChipLogFormatX64 ", opening wildcard subscription",
+                    ChipLogValueX64(peer.GetNodeId()));
+
+    // Open the subscription on the just-established session over the
+    // commissioner's exchange manager. The ReadClient inherits the
+    // commissioner-owned session; if the peer later drops, the subscription
+    // re-establishes CASE through the commissioner's CASESessionManager.
+    NXP::App::JFA::OpenWildcardSubscription(exchangeMgr, sessionHandle, peer);
+}
+
+void JFAManager::OnRestoreConnectionFailure(void * context, const ScopedNodeId & peerId, CHIP_ERROR error)
+{
+    (void) context;
+    ChipLogError(JointFabric, "Restore: failed to establish CASE to 0x" ChipLogFormatX64 " on fabric index %d: %" CHIP_ERROR_FORMAT,
+                 ChipLogValueX64(peerId.GetNodeId()), peerId.GetFabricIndex(), error.Format());
+}
 
 CHIP_ERROR JFAManager::Init(Server & server)
 {
@@ -308,6 +361,10 @@ void JFAManager::OnNetworkReady()
                 ChipLogProgress(JointFabric, "Restoring RefreshNode for nodeId=0x" ChipLogFormatX64, ChipLogValueX64(entry.nodeID));
                 LogErrorOnFailure(datastore.RefreshNode(entry.nodeID));
             }
+            // Schedule the wildcard subscriptions once, after the delay:
+            ChipLogProgress(JointFabric, "Scheduling subscription restore in %u s", kPostRebootSubscriptionDelaySeconds);
+            DeviceLayer::SystemLayer().StartTimer(chip::System::Clock::Seconds32(kPostRebootSubscriptionDelaySeconds),
+                                                  OnRestoreSubscriptionsTimer, this);
         }
         else
         {
@@ -585,7 +642,6 @@ void JFAManager::OnCommissioningCompleteResponse(
         {
         case kStandardCommissioningComplete: {
             ChipLogProgress(JointFabric, "Standard Commissioning (nodeId=%ld) success", jfaManager->mNodeId);
-            jfaManager->ReleaseSession();
             auto & datastore = Server::GetInstance().GetJointFabricDatastore();
 
             // The pending node entry was added in FinalizeCommissioning before commissioning
@@ -593,9 +649,16 @@ void JFAManager::OnCommissioningCompleteResponse(
             // succeeded, invoke RefreshNode to update the entry with state read from the
             // Node and mark it committed.
             LogErrorOnFailure(datastore.RefreshNode(jfaManager->mNodeId));
-            return;
             ChipLogProgress(JointFabric, "Standard Commissioning (nodeId=0x" ChipLogFormatX64 ") success",
                             ChipLogValueX64(jfaManager->mNodeId));
+            // Immediately after onboarding, open a wildcard subscription to the
+            // commissionee over the CASE session just used to complete
+            // commissioning. The JFA is the commissioner and already holds the
+            // session. The subscription's ReadClient takes its own reference
+            // to the session, so it stays resident once the JFA drops its
+            // transient command-session holder below
+            // (see the non-defunct release on the success path).
+            jfaManager->OpenCommissioneeSubscription();
             break;
         }
         case kJCMCommissioning: {
@@ -608,7 +671,33 @@ void JFAManager::OnCommissioningCompleteResponse(
         }
     }
 
-    jfaManager->ReleaseSession();
+    // On the standard-commissioning success path the wildcard subscription has
+    // grabbed its own reference to the secure session, so only drop the JFA's
+    // holder without marking the session defunct; otherwise tear the session
+    // down as before.
+    if (data.errorCode == GeneralCommissioning::CommissioningErrorEnum::kOk &&
+        jfaManager->mOnConnectedAction == kStandardCommissioningComplete)
+    {
+        jfaManager->mSessionHolder.Release();
+        jfaManager->mExchangeMgr = nullptr;
+    }
+    else
+    {
+        jfaManager->ReleaseSession();
+    }
+}
+
+void JFAManager::OpenCommissioneeSubscription()
+{
+    auto optionalSessionHandle = mSessionHolder.Get();
+
+    if (mExchangeMgr == nullptr || !optionalSessionHandle.HasValue())
+    {
+        ChipLogError(JointFabric, "Cannot open commissionee subscription: no active session");
+        return;
+    }
+
+    NXP::App::JFA::OpenWildcardSubscription(*mExchangeMgr, optionalSessionHandle.Value(), ScopedNodeId(mNodeId, jfFabricIndex));
 }
 
 void JFAManager::OnCommissioningCompleteFailure(void * context, CHIP_ERROR error)
