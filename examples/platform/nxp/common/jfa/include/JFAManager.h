@@ -57,12 +57,26 @@ public:
     bool IsDeviceJFAdmin();
     bool IsDeviceJFAnchor();
 
+    // Client commands: send cluster commands to peer devices already on the joint fabric.
+    CHIP_ERROR SendOnOff(NodeId nodeId, EndpointId endpointId, bool on);
+    CHIP_ERROR SendOnOffToggle(NodeId nodeId, EndpointId endpointId);
+    CHIP_ERROR SendFanOnOff(NodeId nodeId, EndpointId endpointId, bool on);
+    CHIP_ERROR ReadContactState(NodeId nodeId, EndpointId endpointId);
+    CHIP_ERROR SendLevelControlMoveToLevel(NodeId nodeId, EndpointId endpointId, uint8_t level, uint16_t transitionTime);
+
 private:
     // Various actions to take when OnConnected callback is called
     enum OnConnectedAction
     {
         kStandardCommissioningComplete = 0,
         kJCMCommissioning              = 1,
+        kOnOffOn                       = 2,
+        kOnOffOff                      = 3,
+        kOnOffToggle                   = 4,
+        kFanOn                         = 5,
+        kFanOff                        = 6,
+        kReadContact                   = 7,
+        kLevelControlMoveToLevel       = 8,
     };
 
     friend JFAManager & JFAMgr(void);
@@ -87,10 +101,24 @@ private:
     size_t mICACBufferLen         = 0;
     bool mCommissionerInitialized = false;
 
+    // Endpoint used for client cluster commands (OnOff, FanControl, BooleanState reads).
+    EndpointId mClientCmdEndpointId = kInvalidEndpointId;
+
+    // Parameters for LevelControl MoveToLevel command.
+    uint8_t mLevelControlLevel           = 0;
+    uint16_t mLevelControlTransitionTime = 0;
+
     void ConnectToNode(ScopedNodeId scopedNodeId, OnConnectedAction onConnectedAction);
     CHIP_ERROR SendCommissioningComplete();
     CHIP_ERROR AnnounceJointFabricAdministrator();
     CHIP_ERROR SendICACSRRequest();
+
+    // Private helpers dispatched from OnConnected for client cluster commands.
+    CHIP_ERROR DoSendOnOff(bool on);
+    CHIP_ERROR DoSendOnOffToggle();
+    CHIP_ERROR DoSendFanMode(bool on);
+    CHIP_ERROR DoReadContactState();
+    CHIP_ERROR DoSendLevelControlMoveToLevel();
 
     static void OnCommissioningCompleteResponse(
         void * context, const app::Clusters::GeneralCommissioning::Commands::CommissioningCompleteResponse::DecodableType & data);
@@ -101,6 +129,22 @@ private:
     OnSendICACSRRequestResponse(void * context,
                                 const app::Clusters::JointFabricAdministrator::Commands::ICACCSRResponse::DecodableType & icaccsr);
     static void OnSendICACSRRequestFailure(void * context, CHIP_ERROR error);
+
+    // Callbacks for OnOff cluster commands.
+    static void OnOnOffSuccess(void * context, const app::DataModel::NullObjectType & data);
+    static void OnOnOffFailure(void * context, CHIP_ERROR error);
+
+    // Callbacks for FanControl FanMode attribute write.
+    static void OnFanWriteSuccess(void * context);
+    static void OnFanWriteFailure(void * context, CHIP_ERROR error);
+
+    // Callbacks for BooleanState StateValue attribute read.
+    static void OnContactReadSuccess(void * context, bool value);
+    static void OnContactReadFailure(void * context, CHIP_ERROR error);
+
+    // Callbacks for LevelControl MoveToLevel command.
+    static void OnLevelControlSuccess(void * context, const app::DataModel::NullObjectType & data);
+    static void OnLevelControlFailure(void * context, CHIP_ERROR error);
 
     void ReleaseSession();
 };

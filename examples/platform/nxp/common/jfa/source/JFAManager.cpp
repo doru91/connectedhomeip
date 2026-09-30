@@ -26,7 +26,14 @@
 
 #include "JFAPlatform.h"
 
+#include <clusters/BooleanState/Attributes.h>
+#include <clusters/FanControl/Attributes.h>
+#include <clusters/FanControl/Enums.h>
+#include <clusters/LevelControl/Commands.h>
+#include <clusters/OnOff/Commands.h>
 #include <controller/CHIPCluster.h>
+#include <controller/ReadInteraction.h>
+#include <controller/WriteInteraction.h>
 #include <lib/support/logging/CHIPLogging.h>
 
 using namespace chip;
@@ -404,7 +411,34 @@ void JFAManager::OnConnected(void * context, Messaging::ExchangeManager & exchan
         TEMPORARY_RETURN_IGNORED jfaManager->AnnounceJointFabricAdministrator();
         break;
     }
-
+    case kOnOffOn: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoSendOnOff(true);
+        break;
+    }
+    case kOnOffOff: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoSendOnOff(false);
+        break;
+    }
+    case kOnOffToggle: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoSendOnOffToggle();
+        break;
+    }
+    case kFanOn: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoSendFanMode(true);
+        break;
+    }
+    case kFanOff: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoSendFanMode(false);
+        break;
+    }
+    case kReadContact: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoReadContactState();
+        break;
+    }
+    case kLevelControlMoveToLevel: {
+        TEMPORARY_RETURN_IGNORED jfaManager->DoSendLevelControlMoveToLevel();
+        break;
+    }
     default:
         break;
     }
@@ -541,6 +575,9 @@ void JFAManager::OnCommissioningCompleteResponse(
         {
             LogErrorOnFailure(Server::GetInstance().GetJointFabricDatastore().RemoveNode(jfaManager->mNodeId));
         }
+        ChipLogProgress(JointFabric, "Commssioning Failed (nodeId=0x" ChipLogFormatX64 ", isJCM = %d), Code=%u",
+                        ChipLogValueX64(jfaManager->mNodeId), jfaManager->mOnConnectedAction == kJCMCommissioning,
+                        to_underlying(data.errorCode));
     }
     else
     {
@@ -557,12 +594,17 @@ void JFAManager::OnCommissioningCompleteResponse(
             // Node and mark it committed.
             LogErrorOnFailure(datastore.RefreshNode(jfaManager->mNodeId));
             return;
+            ChipLogProgress(JointFabric, "Standard Commissioning (nodeId=0x" ChipLogFormatX64 ") success",
+                            ChipLogValueX64(jfaManager->mNodeId));
             break;
         }
         case kJCMCommissioning: {
-            ChipLogProgress(JointFabric, "Joint Commissioning Method (nodeId=%ld) success", jfaManager->mNodeId);
+            ChipLogProgress(JointFabric, "Joint Commissioning Method (nodeId=0x" ChipLogFormatX64 ") success",
+                            ChipLogValueX64(jfaManager->mNodeId));
             break;
         }
+        default:
+            break;
         }
     }
 
@@ -596,4 +638,210 @@ CHIP_ERROR JFAManager::GetIcacCsr(MutableByteSpan & icacCsr)
     }
 
     return CHIP_ERROR_UNINITIALIZED;
+}
+
+// ============================================================
+// Client cluster commands
+// ============================================================
+
+CHIP_ERROR JFAManager::SendOnOff(NodeId nodeId, EndpointId endpointId, bool on)
+{
+    VerifyOrReturnError(IsDeviceCommissioned(), CHIP_ERROR_INCORRECT_STATE);
+
+    mClientCmdEndpointId = endpointId;
+    ScopedNodeId scopedNodeId(nodeId, jfFabricIndex);
+    ConnectToNode(scopedNodeId, on ? kOnOffOn : kOnOffOff);
+    return CHIP_NO_ERROR;
+}
+
+CHIP_ERROR JFAManager::SendFanOnOff(NodeId nodeId, EndpointId endpointId, bool on)
+{
+    VerifyOrReturnError(IsDeviceCommissioned(), CHIP_ERROR_INCORRECT_STATE);
+
+    mClientCmdEndpointId = endpointId;
+    ScopedNodeId scopedNodeId(nodeId, jfFabricIndex);
+    ConnectToNode(scopedNodeId, on ? kFanOn : kFanOff);
+    return CHIP_NO_ERROR;
+}
+
+CHIP_ERROR JFAManager::ReadContactState(NodeId nodeId, EndpointId endpointId)
+{
+    VerifyOrReturnError(IsDeviceCommissioned(), CHIP_ERROR_INCORRECT_STATE);
+
+    mClientCmdEndpointId = endpointId;
+    ScopedNodeId scopedNodeId(nodeId, jfFabricIndex);
+    ConnectToNode(scopedNodeId, kReadContact);
+    return CHIP_NO_ERROR;
+}
+
+CHIP_ERROR JFAManager::SendOnOffToggle(NodeId nodeId, EndpointId endpointId)
+{
+    VerifyOrReturnError(IsDeviceCommissioned(), CHIP_ERROR_INCORRECT_STATE);
+
+    mClientCmdEndpointId = endpointId;
+    ScopedNodeId scopedNodeId(nodeId, jfFabricIndex);
+    ConnectToNode(scopedNodeId, kOnOffToggle);
+    return CHIP_NO_ERROR;
+}
+
+CHIP_ERROR JFAManager::SendLevelControlMoveToLevel(NodeId nodeId, EndpointId endpointId, uint8_t level, uint16_t transitionTime)
+{
+    VerifyOrReturnError(IsDeviceCommissioned(), CHIP_ERROR_INCORRECT_STATE);
+
+    mClientCmdEndpointId        = endpointId;
+    mLevelControlLevel          = level;
+    mLevelControlTransitionTime = transitionTime;
+    ScopedNodeId scopedNodeId(nodeId, jfFabricIndex);
+    ConnectToNode(scopedNodeId, kLevelControlMoveToLevel);
+    return CHIP_NO_ERROR;
+}
+
+CHIP_ERROR JFAManager::DoSendOnOff(bool on)
+{
+    VerifyOrReturnError(mExchangeMgr != nullptr, CHIP_ERROR_UNINITIALIZED);
+
+    ChipLogProgress(JointFabric, "DoSendOnOff: sending %s to node 0x" ChipLogFormatX64 " ep %u", on ? "On" : "Off",
+                    ChipLogValueX64(mNodeId), mClientCmdEndpointId);
+
+    Controller::ClusterBase cluster(*mExchangeMgr, mSessionHolder.Get().Value(), mClientCmdEndpointId);
+
+    if (on)
+    {
+        OnOff::Commands::On::Type request;
+        return cluster.InvokeCommand(request, this, OnOnOffSuccess, OnOnOffFailure);
+    }
+
+    OnOff::Commands::Off::Type request;
+    return cluster.InvokeCommand(request, this, OnOnOffSuccess, OnOnOffFailure);
+}
+
+CHIP_ERROR JFAManager::DoSendOnOffToggle()
+{
+    VerifyOrReturnError(mExchangeMgr != nullptr, CHIP_ERROR_UNINITIALIZED);
+
+    ChipLogProgress(JointFabric, "DoSendOnOffToggle: sending Toggle to node 0x" ChipLogFormatX64 " ep %u", ChipLogValueX64(mNodeId),
+                    mClientCmdEndpointId);
+
+    OnOff::Commands::Toggle::Type request;
+    Controller::ClusterBase cluster(*mExchangeMgr, mSessionHolder.Get().Value(), mClientCmdEndpointId);
+    return cluster.InvokeCommand(request, this, OnOnOffSuccess, OnOnOffFailure);
+}
+
+void JFAManager::OnOnOffSuccess(void * context, const app::DataModel::NullObjectType & data)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogProgress(JointFabric, "OnOff command succeeded");
+    jfaManager->ReleaseSession();
+}
+
+void JFAManager::OnOnOffFailure(void * context, CHIP_ERROR error)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogError(JointFabric, "OnOff command failed: %s", chip::ErrorStr(error));
+    jfaManager->ReleaseSession();
+}
+
+CHIP_ERROR JFAManager::DoSendFanMode(bool on)
+{
+    VerifyOrReturnError(mExchangeMgr != nullptr, CHIP_ERROR_UNINITIALIZED);
+
+    using FanModeEnum = app::Clusters::FanControl::FanModeEnum;
+    FanModeEnum mode  = on ? FanModeEnum::kOn : FanModeEnum::kOff;
+
+    ChipLogProgress(JointFabric, "DoSendFanMode: setting FanMode=%u on node 0x" ChipLogFormatX64 " ep %u", to_underlying(mode),
+                    ChipLogValueX64(mNodeId), mClientCmdEndpointId);
+
+    Controller::ClusterBase cluster(*mExchangeMgr, mSessionHolder.Get().Value(), mClientCmdEndpointId);
+    // Use the explicit clusterId/attributeId overload to avoid template argument
+    // disambiguation issues with nested type names on GCC.
+    return cluster.WriteAttribute(mode, this, FanControl::Id, FanControl::Attributes::FanMode::Id, OnFanWriteSuccess,
+                                  OnFanWriteFailure, chip::NullOptional);
+}
+
+void JFAManager::OnFanWriteSuccess(void * context)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogProgress(JointFabric, "FanControl FanMode write succeeded");
+    jfaManager->ReleaseSession();
+}
+
+void JFAManager::OnFanWriteFailure(void * context, CHIP_ERROR error)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogError(JointFabric, "FanControl FanMode write failed: %s", chip::ErrorStr(error));
+    jfaManager->ReleaseSession();
+}
+
+CHIP_ERROR JFAManager::DoReadContactState()
+{
+    VerifyOrReturnError(mExchangeMgr != nullptr, CHIP_ERROR_UNINITIALIZED);
+
+    ChipLogProgress(JointFabric, "DoReadContactState: reading from node 0x" ChipLogFormatX64 " ep %u", ChipLogValueX64(mNodeId),
+                    mClientCmdEndpointId);
+
+    Controller::ClusterBase cluster(*mExchangeMgr, mSessionHolder.Get().Value(), mClientCmdEndpointId);
+    // Use the explicit DecodableType/clusterId/attributeId overload to avoid template
+    // argument disambiguation issues with nested type names on GCC.
+    return cluster.ReadAttribute<bool, bool>(this, BooleanState::Id, BooleanState::Attributes::StateValue::Id, OnContactReadSuccess,
+                                             OnContactReadFailure);
+}
+
+void JFAManager::OnContactReadSuccess(void * context, bool value)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogProgress(JointFabric, "BooleanState StateValue = %s", value ? "true (contact)" : "false (no contact)");
+    jfaManager->ReleaseSession();
+}
+
+void JFAManager::OnContactReadFailure(void * context, CHIP_ERROR error)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogError(JointFabric, "BooleanState read failed: %s", chip::ErrorStr(error));
+    jfaManager->ReleaseSession();
+}
+
+CHIP_ERROR JFAManager::DoSendLevelControlMoveToLevel()
+{
+    VerifyOrReturnError(mExchangeMgr != nullptr, CHIP_ERROR_UNINITIALIZED);
+
+    ChipLogProgress(JointFabric, "DoSendLevelControlMoveToLevel: level=%u transitionTime=%u on node 0x" ChipLogFormatX64 " ep %u",
+                    mLevelControlLevel, mLevelControlTransitionTime, ChipLogValueX64(mNodeId), mClientCmdEndpointId);
+
+    LevelControl::Commands::MoveToLevel::Type request;
+    request.level = mLevelControlLevel;
+    request.transitionTime.SetNonNull(mLevelControlTransitionTime);
+    // optionsMask and optionsOverride are left at their default zero values.
+
+    Controller::ClusterBase cluster(*mExchangeMgr, mSessionHolder.Get().Value(), mClientCmdEndpointId);
+    return cluster.InvokeCommand(request, this, OnLevelControlSuccess, OnLevelControlFailure);
+}
+
+void JFAManager::OnLevelControlSuccess(void * context, const app::DataModel::NullObjectType & data)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogProgress(JointFabric, "LevelControl MoveToLevel command succeeded");
+    jfaManager->ReleaseSession();
+}
+
+void JFAManager::OnLevelControlFailure(void * context, CHIP_ERROR error)
+{
+    JFAManager * jfaManager = static_cast<JFAManager *>(context);
+    VerifyOrDie(jfaManager != nullptr);
+
+    ChipLogError(JointFabric, "LevelControl MoveToLevel command failed: %s", chip::ErrorStr(error));
+    jfaManager->ReleaseSession();
 }

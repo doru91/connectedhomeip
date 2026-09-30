@@ -7,6 +7,7 @@
         -   [Initialize Ecosystem A (Vendor ID = 0xFFF1)](#initialize-ecosystem-a-vendor-id--0xfff1)
         -   [Initialize Ecosystem B (Vendor ID = 0xFFF2)](#initialize-ecosystem-b-vendor-id--0xfff2)
     -   [Manually Testing JCM (Joint Commissioning Method)](#manually-testing-jcm-joint-commissioning-method)
+    -   [Controller Supported Commands](#controller-supported-commands)
     -   [Unit Testing Joint Fabric](#unit-testing-joint-fabric)
 
 ## Joint Fabric Example Applications
@@ -282,6 +283,87 @@ On the Ecosystem A Joint Fabric Controller application
 
 ```
 pairing code 10 [manual pairing code] --jcm true
+```
+
+## Controller Supported Commands
+
+Once the jf-admin-app has commissioned peer devices onto the joint fabric, it
+can act as a controller and send client cluster commands to those nodes. These
+commands are exposed through the application shell under the `control` command
+and are compiled in when `CONFIG_CHIP_APP_JF_ADMIN` is enabled (default for the
+NXP OTBR / jf-admin-app build).
+
+Common arguments:
+
+-   `<nodeId-hex>`: operational Node ID of the target peer on the joint fabric,
+    in hexadecimal (e.g. `0x2`).
+-   `<endpointId>`: target endpoint on the peer node, in decimal.
+
+The CASE session to the peer is established on demand and released after each
+command completes.
+
+### `control onoff` – OnOff cluster
+
+Sends `On`, `Off`, or `Toggle` commands of the `OnOff` cluster.
+
+```
+control onoff [on|off|toggle] <nodeId-hex> <endpointId>
+```
+
+Examples:
+
+```
+>>> control onoff on     0x2 1
+>>> control onoff off    0x2 1
+>>> control onoff toggle 0x2 1
+```
+
+### `control fan` – FanControl cluster
+
+Writes the `FanMode` attribute of the `FanControl` cluster to `On` or `Off`.
+
+```
+control fan [on|off] <nodeId-hex> <endpointId>
+```
+
+Examples:
+
+```
+>>> control fan on  0x3 1
+>>> control fan off 0x3 1
+```
+
+### `control contact` – BooleanState cluster
+
+Reads the `StateValue` attribute of the `BooleanState` cluster (used by contact
+sensors). The result is printed to the shell log as
+`true (contact)` / `false (no contact)`.
+
+```
+control contact read <nodeId-hex> <endpointId>
+```
+
+Example:
+
+```
+>>> control contact read 0x4 1
+```
+
+### `control level` – LevelControl cluster
+
+Invokes `MoveToLevel` on the `LevelControl` cluster.
+
+```
+control level <level 0-254> <transitionTime 1/10s> <nodeId-hex> <endpointId>
+```
+
+-   `<level>`: target level, in the range `0`–`254`.
+-   `<transitionTime>`: transition time in tenths of a second (`uint16`).
+
+Example (move node `0x2` endpoint `1` to level `128` over 2.0 seconds):
+
+```
+>>> control level 128 20 0x2 1
 ```
 
 ## Unit Testing Joint Fabric
