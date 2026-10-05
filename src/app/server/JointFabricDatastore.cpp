@@ -19,12 +19,25 @@
 
 #include <algorithm>
 #include <cstring>
+#include <lib/core/TLV.h>
+#include <lib/support/SafeInt.h>
 #include <unordered_set>
 
 namespace chip {
 namespace app {
 
 namespace {
+// 1 control byte + 8 value bytes, anonymous tag (0 tag bytes)
+constexpr size_t kNodeIdTlvSize = 9;
+
+// 1 start-container byte + 1 end-of-container byte
+constexpr size_t kArrayOverhead = 2;
+
+// Maximum buffer: 256 nodes × 9 bytes + 2 bytes overhead
+constexpr size_t kMaxNodeListTlvLength = kNodeIdTlvSize * 256 /*kMaxNodes*/ + kArrayOverhead;
+
+constexpr char kJFDatastoreNodeListKey[] = "jfds/nodes";
+
 /**
  * Validate that an input is the correct length to be an Epoch Key. Null keys are considered valid.
  */
@@ -195,6 +208,8 @@ CHIP_ERROR JointFabricDatastore::AddPendingNode(NodeId nodeId, const CharSpan & 
         listener->MarkNodeListChanged();
     }
 
+    ReturnErrorOnFailure(StoreNodeList());
+
     return CHIP_NO_ERROR;
 }
 
@@ -234,6 +249,8 @@ CHIP_ERROR JointFabricDatastore::RemoveNode(NodeId nodeId)
             return CHIP_NO_ERROR;
         }
     }
+
+    ReturnErrorOnFailure(StoreNodeList());
 
     return CHIP_IM_GLOBAL_STATUS(ConstraintError);
 }
@@ -2370,6 +2387,89 @@ CHIP_ERROR JointFabricDatastore::ForceAddNodeKeySetEntry(uint16_t groupKeySetId,
 
     mNodeKeySetEntries.push_back(newEntry);
     return CHIP_NO_ERROR;
+}
+
+CHIP_ERROR JointFabricDatastore::Init(PersistentStorageDelegate * storageDelegate)
+{
+    VerifyOrReturnError(storageDelegate != nullptr, CHIP_ERROR_INVALID_ARGUMENT);
+    mStorageDelegate = storageDelegate;
+    // Load node list on startup; ignore "not found" (first boot).
+    CHIP_ERROR err = LoadNodeList();
+    if (err == CHIP_ERROR_PERSISTED_STORAGE_VALUE_NOT_FOUND)
+    {
+        return CHIP_NO_ERROR;
+    }
+    return err;
+}
+
+CHIP_ERROR JointFabricDatastore::StoreNodeList()
+{
+    if (mStorageDelegate == nullptr)
+    {
+        return CHIP_NO_ERROR;
+    }
+
+    size_t total = kNodeIdTlvSize * mNodeInformationEntries.size() + kArrayOverhead;
+    Platform::ScopedMemoryBuffer<uint8_t> buf;
+    VerifyOrReturnError(buf.Calloc(total), CHIP_ERROR_NO_MEMORY);
+    TLV::ScopedBufferTLVWriter writer(std::move(buf), total);
+
+    TLV::TLVType arrayType;
+    ReturnErrorOnFailure(writer.StartContainer(TLV::AnonymousTag(), TLV::kTLVType_Array, arrayType));
+    for (const auto & entry : mNodeInformationEntries)
+    {
+        ReturnErrorOnFailure(writer.Put(TLV::AnonymousTag(), entry.nodeID));
+    }
+    ReturnErrorOnFailure(writer.EndContainer(arrayType));
+
+    const auto len = writer.GetLengthWritten();
+    VerifyOrReturnError(CanCastTo<uint16_t>(len), CHIP_ERROR_BUFFER_TOO_SMALL);
+
+    ReturnErrorOnFailure(writer.Finalize(buf));
+
+    ChipLogProgress(JointFabric, "StoreNodeList: writing %u entries to KVS", static_cast<unsigned>(mNodeInformationEntries.size()));
+    CHIP_ERROR storeErr = mStorageDelegate->SyncSetKeyValue(kJFDatastoreNodeListKey, buf.Get(), static_cast<uint16_t>(len));
+    if (storeErr != CHIP_NO_ERROR)
+    {
+        ChipLogError(JointFabric, "StoreNodeList: SyncSetKeyValue failed: %" CHIP_ERROR_FORMAT, storeErr.Format());
+    }
+    return storeErr;
+}
+
+CHIP_ERROR JointFabricDatastore::LoadNodeList()
+{
+    if (mStorageDelegate == nullptr)
+    {
+        return CHIP_NO_ERROR;
+    }
+
+    Platform::ScopedMemoryBuffer<uint8_t> buf;
+    VerifyOrReturnError(buf.Calloc(kMaxNodeListTlvLength), CHIP_ERROR_NO_MEMORY);
+    uint16_t length = kMaxNodeListTlvLength;
+    CHIP_ERROR err  = mStorageDelegate->SyncGetKeyValue(kJFDatastoreNodeListKey, buf.Get(), length);
+    if (err == CHIP_ERROR_PERSISTED_STORAGE_VALUE_NOT_FOUND)
+    {
+        return CHIP_NO_ERROR; // first boot, nothing to restore
+    }
+    ReturnErrorOnFailure(err);
+    TLV::ScopedBufferTLVReader reader(std::move(buf), length);
+    ReturnErrorOnFailure(reader.Next(TLV::kTLVType_Array, TLV::AnonymousTag()));
+    TLV::TLVType arrayType;
+    ReturnErrorOnFailure(reader.EnterContainer(arrayType));
+
+    while (reader.Next(TLV::kTLVType_UnsignedInteger, TLV::AnonymousTag()) == CHIP_NO_ERROR)
+    {
+        NodeId nodeId;
+        ReturnErrorOnFailure(reader.Get(nodeId));
+        // Reconstruct a minimal node entry; full details re-fetched from device via FetchEndpointList
+        mNodeInformationEntries.emplace_back(nodeId, Clusters::JointFabricDatastore::DatastoreStateEnum::kPending, NullOptional);
+    }
+
+    ChipLogProgress(JointFabric, "LoadNodeList: restored %u entries from KVS",
+                    static_cast<unsigned>(mNodeInformationEntries.size()));
+
+    ReturnErrorOnFailure(reader.ExitContainer(arrayType));
+    return reader.VerifyEndOfContainer();
 }
 
 } // namespace app

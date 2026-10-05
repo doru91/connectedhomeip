@@ -284,6 +284,8 @@ public:
         }
     };
 
+    CHIP_ERROR Init(PersistentStorageDelegate * storageDelegate);
+
     CHIP_ERROR SetAnchorRootCA(const ByteSpan & anchorRootCA)
     {
         if (anchorRootCA.size() >= sizeof(mAnchorRootCA))
@@ -524,6 +526,10 @@ private:
     VendorId mAnchorVendorId                              = VendorId::NotSpecified;
     FabricIndex mAnchorFabricIndex                        = kUndefinedFabricIndex;
     Clusters::JointFabricDatastore::Structs::DatastoreStatusEntryStruct::Type mDatastoreStatusEntry;
+    PersistentStorageDelegate * mStorageDelegate = nullptr;
+
+    CHIP_ERROR StoreNodeList();
+    CHIP_ERROR LoadNodeList();
 
     /**
      * Clears all stored records and resets anchor identity. Used by OnFabricRemoved() when the joint fabric is removed.
@@ -557,9 +563,10 @@ private:
         mAnchorVendorId           = VendorId::NotSpecified;
         mAnchorFabricIndex        = kUndefinedFabricIndex;
         mDatastoreStatusEntry     = Clusters::JointFabricDatastore::Structs::DatastoreStatusEntryStruct::Type{};
+
+        StoreNodeList();
     }
 
-    // TODO: Persist these members to local storage
     std::vector<GenericDatastoreNodeInformationEntry> mNodeInformationEntries;
     std::vector<Clusters::JointFabricDatastore::Structs::DatastoreGroupKeySetStruct::Type> mGroupKeySetList;
     std::unordered_map<uint16_t, GroupKeySetStorage> mGroupKeySetStorage;

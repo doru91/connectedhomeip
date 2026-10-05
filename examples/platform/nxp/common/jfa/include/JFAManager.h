@@ -41,6 +41,7 @@ public:
 
     CHIP_ERROR Init(Server & server);
     void HandleCommissioningCompleteEvent();
+    void OnNetworkReady();
     CHIP_ERROR FinalizeCommissioning(NodeId nodeId, bool isJCM, chip::Crypto::P256PublicKey & trustedIcacPublicKeyB,
                                      uint16_t peerAdminJFAdminClusterEndpointId);
 

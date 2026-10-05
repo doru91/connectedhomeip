@@ -50,6 +50,26 @@ CHIP_ERROR JFAManager::Init(Server & server)
     mServer             = &server;
     mCASESessionManager = server.GetCASESessionManager();
 
+    // Restore jfFabricIndex from persisted fabric table after a reboot.
+    for (const auto & fabricTable : mServer->GetFabricTable())
+    {
+        FabricIndex fabricIndex = fabricTable.GetFabricIndex();
+        CATValues cats;
+        if (mServer->GetFabricTable().FetchCATs(fabricIndex, cats) != CHIP_NO_ERROR)
+        {
+            continue;
+        }
+        if (cats.ContainsIdentifier(kAdminCATIdentifier) && cats.ContainsIdentifier(kAnchorCATIdentifier))
+        {
+            jfFabricIndex = fabricIndex;
+            ChipLogProgress(JointFabric, "Restored JF fabric index %u from persisted fabric table", fabricIndex);
+            // Commissioner init is intentionally deferred to OnNetworkReady
+            // (kDnssdInitialized). JFAInitCommissioner calls AdvertiseOperational,
+            // which requires DNS-SD to be up; attempting it here, before the
+            // network is ready, fails.
+            break;
+        }
+    }
     return CHIP_NO_ERROR;
 }
 
@@ -75,6 +95,32 @@ CHIP_ERROR JFAManager::FinalizeCommissioning(NodeId nodeId, bool isJCM, P256Publ
     peerAdminJFAdminClusterEndpointId = endpointId;
     peerAdminICACPubKey               = trustedIcacPublicKeyB;
     ScopedNodeId scopedNodeId         = ScopedNodeId(nodeId, jfFabricIndex);
+
+    // Per spec 11.24.4.1 [11.1705], the Commissioner populates the Datastore with a
+    // pending node entry before completing commissioning, so the node is guaranteed
+    // to appear in the Datastore before it is brought onto the fabric. RefreshNode
+    // (which marks the entry committed) is invoked only after CommissioningComplete
+    // succeeds, in OnCommissioningCompleteResponse. On any failure path the pending
+    // entry is removed per [11.1707].
+    //
+    // Only the standard-commissioning flow uses the Datastore node list; the JCM flow
+    // does not add a pending node here.
+    if (!isJCM)
+    {
+        auto & datastore = Server::GetInstance().GetJointFabricDatastore();
+
+        char friendlyNameBuffer[32];
+        int written = snprintf(friendlyNameBuffer, sizeof(friendlyNameBuffer), "node-0x" ChipLogFormatX64, ChipLogValueX64(nodeId));
+        CharSpan friendlyName = CharSpan(friendlyNameBuffer, static_cast<size_t>(written));
+
+        // Defensively remove any stale pending entry from a previous, aborted
+        // commissioning attempt so AddPendingNode does not fail with ConstraintError.
+        // RemoveNode returns a ConstraintError when no entry exists; that is expected
+        // for a fresh node and is intentionally ignored.
+        (void) datastore.RemoveNode(nodeId);
+        ReturnErrorOnFailure(datastore.AddPendingNode(nodeId, friendlyName));
+    }
+
     ConnectToNode(scopedNodeId, isJCM ? kJCMCommissioning : kStandardCommissioningComplete);
 
     return CHIP_NO_ERROR;
@@ -223,6 +269,47 @@ void JFAManager::HandleCommissioningCompleteEvent()
     }
 }
 
+void JFAManager::OnNetworkReady()
+{
+    if (mCommissionerInitialized || jfFabricIndex == kUndefinedFabricIndex)
+    {
+        return;
+    }
+
+    // jfFabricIndex was restored in JFAManager::Init(). This is the single
+    // commissioner-init point for the reboot case: it runs on kDnssdInitialized,
+    // so AdvertiseOperational() inside JFAInitCommissioner has a working DNS-SD
+    // service.
+    for (const auto & fabricTable : mServer->GetFabricTable())
+    {
+        if (fabricTable.GetFabricIndex() != jfFabricIndex)
+        {
+            continue;
+        }
+        CHIP_ERROR err = JFAInitCommissioner(fabricTable.GetFabricId(), jfFabricIndex);
+        if (err == CHIP_NO_ERROR)
+        {
+            mCommissionerInitialized = true;
+            ChipLogProgress(JointFabric, "Commissioner re-initialized after network ready");
+
+            // Re-fetch data for all nodes that were restored
+            // from KVS (their node IDs are in the datastore but endpoints are not
+            // persisted and must be re-fetched from the commissionee).
+            auto & datastore = Server::GetInstance().GetJointFabricDatastore();
+            for (const auto & entry : datastore.GetNodeInformationEntries())
+            {
+                ChipLogProgress(JointFabric, "Restoring RefreshNode for nodeId=0x" ChipLogFormatX64, ChipLogValueX64(entry.nodeID));
+                LogErrorOnFailure(datastore.RefreshNode(entry.nodeID));
+            }
+        }
+        else
+        {
+            ChipLogError(JointFabric, "OnNetworkReady: JFAInitCommissioner failed: %" CHIP_ERROR_FORMAT, err.Format());
+        }
+        break;
+    }
+}
+
 bool JFAManager::IsDeviceJFAdmin()
 {
     if (jfFabricIndex == kUndefinedFabricId)
@@ -330,6 +417,13 @@ void JFAManager::OnConnectionFailure(void * context, const ScopedNodeId & peerId
 
     ChipLogError(JointFabric, "Failed to establish connection to 0x" ChipLogFormatX64 " on fabric index %d",
                  ChipLogValueX64(peerId.GetNodeId()), peerId.GetFabricIndex());
+
+    // Per spec 11.24.4.1 [11.1707], a failed finalize-commissioning step removes the
+    // pending node from the Datastore. Only the standard flow added a pending entry.
+    if (jfaManager->mOnConnectedAction == kStandardCommissioningComplete)
+    {
+        LogErrorOnFailure(Server::GetInstance().GetJointFabricDatastore().RemoveNode(peerId.GetNodeId()));
+    }
 
     jfaManager->ReleaseSession();
 }
@@ -439,6 +533,14 @@ void JFAManager::OnCommissioningCompleteResponse(
     {
         ChipLogProgress(JointFabric, "Commssioning Failed (nodeId=%ld, isJCM = %d), Code=%u", jfaManager->mNodeId,
                         jfaManager->mOnConnectedAction == kJCMCommissioning, to_underlying(data.errorCode));
+
+        // Per spec 11.24.4.1 [11.1707], if the finalize-commissioning step fails the
+        // Commissioner removes the pending node from the Datastore. Only the standard
+        // flow added a pending entry in FinalizeCommissioning.
+        if (jfaManager->mOnConnectedAction == kStandardCommissioningComplete)
+        {
+            LogErrorOnFailure(Server::GetInstance().GetJointFabricDatastore().RemoveNode(jfaManager->mNodeId));
+        }
     }
     else
     {
@@ -446,6 +548,15 @@ void JFAManager::OnCommissioningCompleteResponse(
         {
         case kStandardCommissioningComplete: {
             ChipLogProgress(JointFabric, "Standard Commissioning (nodeId=%ld) success", jfaManager->mNodeId);
+            jfaManager->ReleaseSession();
+            auto & datastore = Server::GetInstance().GetJointFabricDatastore();
+
+            // The pending node entry was added in FinalizeCommissioning before commissioning
+            // completed (spec 11.24.4.1 [11.1705]). Now that CommissioningComplete has
+            // succeeded, invoke RefreshNode to update the entry with state read from the
+            // Node and mark it committed.
+            LogErrorOnFailure(datastore.RefreshNode(jfaManager->mNodeId));
+            return;
             break;
         }
         case kJCMCommissioning: {
@@ -462,6 +573,14 @@ void JFAManager::OnCommissioningCompleteFailure(void * context, CHIP_ERROR error
 {
     JFAManager * jfaManagerCore = static_cast<JFAManager *>(context);
     VerifyOrDie(jfaManagerCore != nullptr);
+
+    // Per spec 11.24.4.1 [11.1707], a failed finalize-commissioning step removes the
+    // pending node from the Datastore. Only the standard flow added a pending entry.
+    if (jfaManagerCore->mOnConnectedAction == kStandardCommissioningComplete)
+    {
+        LogErrorOnFailure(Server::GetInstance().GetJointFabricDatastore().RemoveNode(jfaManagerCore->mNodeId));
+    }
+
     jfaManagerCore->ReleaseSession();
 
     ChipLogError(JointFabric, "Received failure response %s\n", chip::ErrorStr(error));

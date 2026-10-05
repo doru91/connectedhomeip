@@ -83,6 +83,10 @@ void JFAEventHandler(const ChipDeviceEvent * event, intptr_t arg)
     {
         JFAMgr().HandleCommissioningCompleteEvent();
     }
+    else if (event->Type == DeviceEventType::kDnssdInitialized)
+    {
+        JFAMgr().OnNetworkReady();
+    }
 }
 
 } // namespace
@@ -91,6 +95,7 @@ CHIP_ERROR Init()
 {
     Server & server = Server::GetInstance();
 
+    ReturnErrorOnFailure(server.GetJointFabricDatastore().Init(&server.GetPersistentStorage()));
     ReturnErrorOnFailure(JFAMgr().Init(server));
     ReturnErrorOnFailure(JFADSync().Init(server));
 
