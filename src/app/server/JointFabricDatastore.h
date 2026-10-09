@@ -564,8 +564,9 @@ private:
         mAnchorFabricIndex        = kUndefinedFabricIndex;
         mDatastoreStatusEntry     = Clusters::JointFabricDatastore::Structs::DatastoreStatusEntryStruct::Type{};
 
-        StoreNodeList();
+        LogErrorOnFailure(StoreNodeList());
     }
+
 
     std::vector<GenericDatastoreNodeInformationEntry> mNodeInformationEntries;
     std::vector<Clusters::JointFabricDatastore::Structs::DatastoreGroupKeySetStruct::Type> mGroupKeySetList;

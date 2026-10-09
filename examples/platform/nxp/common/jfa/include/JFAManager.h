@@ -27,15 +27,84 @@
 #include <functional>
 #include <stdbool.h>
 #include <stdint.h>
+#include <vector>
 
 #include <lib/core/CHIPError.h>
+#include <lib/core/TLV.h>
+#include <app/data-model/DecodableList.h>
 
 #include "JFARpc.h"
 
 namespace chip {
 
+// Raw-TLV decodable mirror of JointFabricDatastore::DatastoreGroupInformationEntryStruct used only
+// to read the peer JFA-A GroupList attribute. The ZAP-generated struct declares groupCAT and
+// groupCATVersion as Nullable<uint16_t>, whose maximum encodable value is 0xFFFE because 0xFFFF is
+// the reserved null sentinel. The Administrator CAT identifier is exactly 0xFFFF, so decoding a
+// group whose GroupCAT is the Administrator CAT with the generated type fails with CONSTRAINT_ERROR.
+// This struct reads those two fields as plain uint16_t (and ignores all other fields) so the full
+// 0xFFFF Administrator CAT identifier can be recovered.
+struct JFAGroupInfoRaw
+{
+    uint16_t groupCAT             = 0;
+    bool groupCATIsNull           = true;
+    uint16_t groupCATVersion      = 0;
+    bool groupCATVersionIsNull    = true;
+
+    static constexpr bool kIsFabricScoped = false;
+
+    CHIP_ERROR Decode(TLV::TLVReader & reader)
+    {
+        // Field tags per DatastoreGroupInformationEntryStruct: 3 = GroupCAT, 4 = GroupCATVersion.
+        constexpr uint8_t kGroupCATTag        = 3;
+        constexpr uint8_t kGroupCATVersionTag = 4;
+
+        TLV::TLVType outer;
+        ReturnErrorOnFailure(reader.EnterContainer(outer));
+
+        CHIP_ERROR err;
+        while ((err = reader.Next()) == CHIP_NO_ERROR)
+        {
+            if (!TLV::IsContextTag(reader.GetTag()))
+            {
+                continue;
+            }
+
+            const uint8_t tagNum = static_cast<uint8_t>(TLV::TagNumFromTag(reader.GetTag()));
+            if (tagNum == kGroupCATTag)
+            {
+                if (reader.GetType() == TLV::kTLVType_Null)
+                {
+                    groupCATIsNull = true;
+                }
+                else
+                {
+                    ReturnErrorOnFailure(reader.Get(groupCAT));
+                    groupCATIsNull = false;
+                }
+            }
+            else if (tagNum == kGroupCATVersionTag)
+            {
+                if (reader.GetType() == TLV::kTLVType_Null)
+                {
+                    groupCATVersionIsNull = true;
+                }
+                else
+                {
+                    ReturnErrorOnFailure(reader.Get(groupCATVersion));
+                    groupCATVersionIsNull = false;
+                }
+            }
+        }
+
+        VerifyOrReturnError(err == CHIP_END_OF_TLV, err);
+        return reader.ExitContainer(outer);
+    }
+};
+
 class JFAManager : public app::JointFabricAdministrator::Delegate
 {
+
 public:
     JFAManager() :
         mOnConnectedCallback(OnConnected, this), mOnConnectionFailureCallback(OnConnectionFailure, this),
@@ -54,8 +123,20 @@ public:
 
     /* app::JointFabricAdministrator::Delegate */
     CHIP_ERROR GetIcacCsr(MutableByteSpan & icacCsr) override;
+    CHIP_ERROR StoreCrossSignedICAC(ByteSpan icac) override;
+    CHIP_ERROR PushJFMaterials(ByteSpan icac, ByteSpan rcac, ByteSpan ipk) override;
+    // Discard locally cached cross-signed ICAC and tell JFC-B to clear its copy.
+    CHIP_ERROR ClearJFMaterials() override;
+    // Record / clear the NodeId of the peer JFA (JFA-A) that initiated JCM on this device.
+    void SetPeerJFANodeId(NodeId nodeId, FabricIndex fabricIndex) override;
+    void ClearPeerJFANodeId() override;
+
+    // Returns the NodeId of the peer JFA-A that is currently running JCM against
+    // this device, or kUndefinedNodeId when no JCM is in progress.
+    NodeId GetPeerJFANodeId() const { return mPeerJFANodeId; }
 
     CHIP_ERROR GetJointFabricMode(uint8_t & jointFabricMode);
+
 
     bool IsDeviceCommissioned() { return jfFabricIndex != kUndefinedFabricId; }
     bool IsDeviceJFAdmin();
@@ -81,7 +162,23 @@ private:
         kFanOff                        = 6,
         kReadContact                   = 7,
         kLevelControlMoveToLevel       = 8,
+        // Device migration (Fabric B -> Fabric A) actions. Appended after the client-command
+        // values so the embedded client commands (2-8) are preserved.
+        kDeviceMigration               = 9,
+        // Connected to the peer JFA-A to register the device as pending in JFA-A's datastore
+        // (JointFabricDatastore::AddPendingNode) before migrating it.
+        kDatastoreAddPendingNode       = 10,
+        // Reconnected to the migrated device over a CASE session on the newly installed Fabric A
+        // (after AddNOC) to send GeneralCommissioning::CommissioningComplete on that fabric.
+        kMigrationCommissioningComplete = 11,
+        // Connected to the peer JFA-A once at the start of migration to read the fabric-wide
+        // Administrator CAT from JFA-A's JointFabricDatastore GroupList.
+        kReadAdminCAT                   = 12,
+        // Post-migration standard commissioning: register the new node in JFA-A's authoritative
+        // JointFabricDatastore NodeList (AddPendingNode followed by RefreshNode).
+        kRegisterNewNodeInJFADatastore  = 13,
     };
+
 
     friend JFAManager & JFAMgr(void);
 
@@ -122,7 +219,49 @@ private:
     uint8_t mLevelControlLevel           = 0;
     uint16_t mLevelControlTransitionTime = 0;
 
+    // Fabric-A IPK (epoch key 0) fetched after commissioning; pushed to JFC-B.
+    uint8_t mIPKBuf[chip::Crypto::CHIP_CRYPTO_SYMMETRIC_KEY_LENGTH_BYTES];
+    size_t mIPKLen = 0;
+
+    // Pending commissionee CSR received during ICACCSRResponse; used to request cross-signing.
+    uint8_t mPendingICACSRBuf[Crypto::kMIN_CSR_Buffer_Size];
+    size_t mPendingICACSRLen = 0;
+
+    // Cross-signed ICAC received from the JFC via RPC; sent to the commissionee via AddICAC.
+    uint8_t mCrossSignedICACBuf[Credentials::kMaxDERCertLength];
+    size_t mCrossSignedICACLen = 0;
+
+    // NodeId of the peer JFA (JFA-A) that initiated JCM against this device.
+    NodeId mPeerJFANodeId = kUndefinedNodeId;
+
+    // Fabric index on which the peer JFA-A invoked AnnounceJointFabricAdministrator
+    // (the joint fabric). The session to JFA-A must be established on this fabric index.
+    FabricIndex mPeerJFAFabricIndex = kUndefinedFabricIndex;
+
+    // --- Device migration (Fabric B -> Fabric A via AddNOC) state ---
+    std::vector<NodeId> mMigrationNodeList;
+    size_t mMigrationIndex   = 0;
+    FabricId mAnchorFabricId = kUndefinedFabricId;
+    NodeId mMigratingNodeId  = kUndefinedNodeId;
+
+    // Fabric-A NOC obtained for the current device from JFC-B (DER); sent via AddNOC.
+    uint8_t mDeviceNOCBuf[Credentials::kMaxDERCertLength];
+    size_t mDeviceNOCLen = 0;
+
+    // Fabric-A root CA (RCAC) returned by JFC-B alongside the device NOC; sent via
+    // AddTrustedRootCertificate. CHIP TLV format.
+    uint8_t mDeviceRCACBuf[Credentials::kMaxDERCertLength];
+    size_t mDeviceRCACLen = 0;
+
+    // Administrator CAT (caseAdminSubject) resolved from the peer JFA-A GroupList before AddNOC.
+    CASEAuthTag mAdminCAT = kUndefinedCAT;
+
+    // --- Post-migration new-node registration state ---
+    // NodeId of the device just commissioned into Fabric A, registered in the anchor JFA-A datastore.
+    NodeId mNewNodeId = kUndefinedNodeId;
+
     void ConnectToNode(ScopedNodeId scopedNodeId, OnConnectedAction onConnectedAction);
+
     // Opens a wildcard subscription to the just-onboarded commissionee over the
     // active CASE session.
     void OpenCommissioneeSubscription();
@@ -163,7 +302,63 @@ private:
     static void OnLevelControlSuccess(void * context, const app::DataModel::NullObjectType & data);
     static void OnLevelControlFailure(void * context, CHIP_ERROR error);
 
+    // --- JCM cross-signing of the commissionee ICAC ---
+    CHIP_ERROR CrossSignICAC();
+    CHIP_ERROR SendAddICAC();
+    static void
+    OnSendAddICACResponse(void * context,
+                          const app::Clusters::JointFabricAdministrator::Commands::ICACResponse::DecodableType & response);
+    static void OnSendAddICACFailure(void * context, CHIP_ERROR error);
+
+    // --- Device migration (Fabric B -> Fabric A) helpers ---
+    void StartDeviceMigration();
+    void MigrateNextNode();
+    // Register the current device as pending in the peer JFA-A datastore via a
+    // JointFabricDatastore::AddPendingNode cluster command, then connect to the device.
+    CHIP_ERROR SendDatastoreAddPendingNode();
+    // Read the peer JFA-A JointFabricDatastore GroupList and extract the Administrator CAT.
+    CHIP_ERROR ReadPeerGroupList();
+    CHIP_ERROR SendArmFailSafe();
+    CHIP_ERROR SendCSRRequest();
+    CHIP_ERROR SendAddTrustedRootCertificate();
+    CHIP_ERROR SendAddNOC();
+    // Invoke GeneralCommissioning::CommissioningComplete on the newly installed Fabric A.
+    CHIP_ERROR SendMigrationCommissioningComplete();
+    void FinishCurrentMigration(CHIP_ERROR err);
+    // Continue the migration once the Admin CAT lookup finished: release the JFA-A session and
+    // connect to the migrating device to run the AddNOC flow.
+    void ContinueMigrationAfterGroupList();
+
+    static void OnDatastoreAddPendingNodeResponse(void * context, const chip::app::DataModel::NullObjectType &);
+    static void OnDatastoreAddPendingNodeFailure(void * context, CHIP_ERROR error);
+    static void OnReadPeerGroupListSuccess(void * context, const app::DataModel::DecodableList<JFAGroupInfoRaw> & groupList);
+    static void OnReadPeerGroupListFailure(void * context, CHIP_ERROR error);
+    static void OnArmFailSafeResponse(
+        void * context, const app::Clusters::GeneralCommissioning::Commands::ArmFailSafeResponse::DecodableType & data);
+    static void OnArmFailSafeFailure(void * context, CHIP_ERROR error);
+    static void OnCSRResponse(void * context,
+                              const app::Clusters::OperationalCredentials::Commands::CSRResponse::DecodableType & data);
+    static void OnCSRFailure(void * context, CHIP_ERROR error);
+    static void OnAddTrustedRootResponse(void * context, const chip::app::DataModel::NullObjectType &);
+    static void OnAddTrustedRootFailure(void * context, CHIP_ERROR error);
+    static void OnAddNOCResponse(void * context,
+                                 const app::Clusters::OperationalCredentials::Commands::NOCResponse::DecodableType & data);
+    static void OnAddNOCFailure(void * context, CHIP_ERROR error);
+    static void OnMigrationCommissioningCompleteResponse(
+        void * context,
+        const app::Clusters::GeneralCommissioning::Commands::CommissioningCompleteResponse::DecodableType & data);
+    static void OnMigrationCommissioningCompleteFailure(void * context, CHIP_ERROR error);
+
+    // --- Post-migration new-node registration in the anchor JFA-A datastore ---
+    CHIP_ERROR SendRegisterNewNodeAddPendingNode();
+    static void OnRegisterNewNodeAddPendingResponse(void * context, const chip::app::DataModel::NullObjectType &);
+    static void OnRegisterNewNodeAddPendingFailure(void * context, CHIP_ERROR error);
+    CHIP_ERROR SendRegisterNewNodeRefreshNode();
+    static void OnRegisterNewNodeRefreshResponse(void * context, const chip::app::DataModel::NullObjectType &);
+    static void OnRegisterNewNodeRefreshFailure(void * context, CHIP_ERROR error);
+
     void ReleaseSession();
+
 };
 
 inline JFAManager & JFAMgr(void)

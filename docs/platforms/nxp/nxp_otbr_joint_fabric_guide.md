@@ -8,6 +8,7 @@
         -   [Initialize Ecosystem B (Vendor ID = 0xFFF2)](#initialize-ecosystem-b-vendor-id--0xfff2)
     -   [Manually Testing JCM (Joint Commissioning Method)](#manually-testing-jcm-joint-commissioning-method)
     -   [Controller Supported Commands](#controller-supported-commands)
+    -   [Testing Cross-Ecosystem Control](#testing-cross-ecosystem-control)
     -   [Unit Testing Joint Fabric](#unit-testing-joint-fabric)
 
 ## Joint Fabric Example Applications
@@ -365,6 +366,54 @@ Example (move node `0x2` endpoint `1` to level `128` over 2.0 seconds):
 ```
 >>> control level 128 20 0x2 1
 ```
+
+## Testing Cross-Ecosystem Control
+
+After the two fabrics have been joined via JCM, each Joint Fabric Controller can
+control the lighting-app that was originally commissioned into the other
+ecosystem. Ecosystem A owns the lighting-app commissioned as node id 2 and
+Ecosystem B owns the lighting-app commissioned as node id 22.
+
+Prerequisites:
+
+-   Both ecosystems have been fully initialized as described in
+    [Initialize Ecosystem A](#initialize-ecosystem-a-vendor-id--0xfff1) and
+    [Initialize Ecosystem B](#initialize-ecosystem-b-vendor-id--0xfff2),
+    including their respective lighting-app (node id 2 on Ecosystem A, node id 22
+    on Ecosystem B).
+-   The two fabrics have been joined via JCM as described in
+    [Manually Testing JCM](#manually-testing-jcm-joint-commissioning-method).
+
+-   Use the Ecosystem A Joint Fabric Controller to toggle the light that belongs
+    to Ecosystem B (node id 22):
+
+```
+>>> onoff toggle 22 1
+```
+
+The On/Off state of the Ecosystem B lighting-app should change. Read back the
+OnOff attribute to confirm:
+
+```
+>>> onoff read on-off 22 1
+```
+
+-   Use the Ecosystem B Joint Fabric Controller to toggle the light that belongs
+    to Ecosystem A (node id 2):
+
+```
+>>> onoff toggle 2 1
+```
+
+The On/Off state of the Ecosystem A lighting-app should change. Read back the
+OnOff attribute to confirm:
+
+```
+>>> onoff read on-off 2 1
+```
+
+If both toggles succeed and are reflected on the targeted lighting-app, the
+cross-ecosystem control over the joint fabric is working as expected.
 
 ## Unit Testing Joint Fabric
 
